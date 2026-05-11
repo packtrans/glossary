@@ -1,0 +1,13 @@
+[package]
+name = "packtrans-glossary-builder"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+packtrans-glossary-core = { path = "../packtrans-glossary-core" }
+
+[[bin]]
+name = "packtrans_glossary_builder"
+path = "src/main.rs"
