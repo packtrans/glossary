@@ -5,7 +5,7 @@ use clap::{Args, Parser, Subcommand};
 use packtrans_glossary_core::{QueryOptions, query_index};
 
 #[derive(Parser)]
-#[command(name = "packtrans_glossary")]
+#[command(name = "packtrans-glossary")]
 #[command(about = "Query Minecraft mod glossary translations")]
 struct Cli {
     #[command(subcommand)]

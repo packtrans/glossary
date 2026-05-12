@@ -6,8 +6,8 @@ Rust-based CLI tools for indexing and querying Minecraft mod glossary translatio
 
 This workspace provides two command-line utilities:
 
-- **`packtrans_glossary`** – End-user tool for querying translations.
-- **`packtrans_glossary_builder`** – Index builder for creating searchable translation databases.
+- **`packtrans-glossary`** – End-user tool for querying translations.
+- **`packtrans-glossary-builder`** – Index builder for creating searchable translation databases.
 
 ## Features
 
@@ -48,7 +48,7 @@ The `modid` is derived from the direct child directory name under `<scan-dir>`.
 ### Building an Index
 
 ```bash
-packtrans_glossary_builder index \
+packtrans-glossary-builder index \
   --scan-dir res \
   --source en_us \
   --target zh_cn \
@@ -64,7 +64,7 @@ packtrans_glossary_builder index \
 ### Querying Translations
 
 ```bash
-packtrans_glossary query "Cooking Pot" \
+packtrans-glossary query "Cooking Pot" \
   --index-db indexes/zh_cn \
   --limit 20
 ```
@@ -109,18 +109,18 @@ cargo check
 
 ```bash
 # Build index
-cargo run --bin packtrans_glossary_builder -- index \
+cargo run --bin packtrans-glossary-builder -- index \
   --scan-dir res \
   --source en_us \
   --target zh_cn \
   --index-db indexes/zh_cn
 
 # Query index
-cargo run --bin packtrans_glossary -- query "Cooking Pot" \
+cargo run --bin packtrans-glossary -- query "Cooking Pot" \
   --index-db indexes/zh_cn \
   --limit 10
 
-cargo run --bin packtrans_glossary -- query "Stove" \
+cargo run --bin packtrans-glossary -- query "Stove" \
   --index-db indexes/zh_cn \
   --limit 10
 ```
