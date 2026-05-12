@@ -9,5 +9,5 @@ clap.workspace = true
 packtrans-glossary-core = { path = "../packtrans-glossary-core" }
 
 [[bin]]
-name = "packtrans_glossary_builder"
+name = "packtrans-glossary-builder"
 path = "src/main.rs"
