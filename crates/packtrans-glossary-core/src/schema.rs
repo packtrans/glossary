@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tantivy::schema::{Field, STORED, Schema, TEXT};
+use tantivy::schema::{Field, IndexRecordOption, Schema, STORED, TextOptions, TEXT};
 
 #[derive(Clone, Copy)]
 pub(crate) struct Fields {
@@ -11,7 +11,30 @@ pub(crate) struct Fields {
     pub target_text: Field,
 }
 
-pub(crate) fn build_schema() -> (Schema, Fields) {
+pub(crate) fn target_tokenizer_name(target_language: &str) -> &'static str {
+    if target_language.starts_with("zh") {
+        "jieba"
+    } else if target_language.starts_with("ja") {
+        "lindera"
+    } else if target_language.starts_with("ko") {
+        "lindera_ko"
+    } else {
+        "default"
+    }
+}
+
+pub(crate) fn build_schema(target_language: &str) -> (Schema, Fields) {
+    let target_text_opts = match target_tokenizer_name(target_language) {
+        "default" => TEXT | STORED,
+        tokenizer_name => TextOptions::default()
+            .set_indexing_options(
+                tantivy::schema::TextFieldIndexing::default()
+                    .set_tokenizer(tokenizer_name)
+                    .set_index_option(IndexRecordOption::WithFreqsAndPositions),
+            )
+            .set_stored(),
+    };
+
     let mut builder = Schema::builder();
     let fields = Fields {
         mod_id: builder.add_text_field("mod_id", STORED),
@@ -19,7 +42,7 @@ pub(crate) fn build_schema() -> (Schema, Fields) {
         source_lang: builder.add_text_field("source_lang", STORED),
         source_text: builder.add_text_field("source_text", TEXT | STORED),
         target_lang: builder.add_text_field("target_lang", STORED),
-        target_text: builder.add_text_field("target_text", STORED),
+        target_text: builder.add_text_field("target_text", target_text_opts),
     };
 
     (builder.build(), fields)

@@ -21,9 +21,11 @@ enum Commands {
 struct QueryCommand {
     query: String,
     #[arg(long)]
-    index_db: PathBuf,
+    index_dir: PathBuf,
     #[arg(long, default_value_t = 20)]
     limit: usize,
+    #[arg(long)]
+    inverse: bool,
 }
 
 fn main() -> Result<()> {
@@ -32,8 +34,9 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Query(command) => query_index(QueryOptions {
             query: command.query,
-            index_db: command.index_db,
+            index_db: command.index_dir,
             limit: command.limit,
+            inverse: command.inverse,
         }),
     }
 }

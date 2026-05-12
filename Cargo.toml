@@ -13,5 +13,8 @@ edition = "2024"
 [workspace.dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+lindera = "2"
+lindera-tantivy = { version = "2", features = ["embed-ipadic", "embed-ko-dic"] }
 serde_json = "1"
-tantivy = "0.22"
+tantivy = "0.25"
+tantivy-jieba = "0.18"
