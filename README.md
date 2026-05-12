@@ -48,29 +48,27 @@ The `modid` is derived from the direct child directory name under `<scan-dir>`.
 ### Building an Index
 
 ```bash
-packtrans-glossary-builder index \
+packtrans-glossary-builder --index-path indexes index \
   --scan-dir res \
-  --source en_us \
-  --target zh_cn \
-  --index-db indexes/zh_cn
+  --lang zh_cn
 ```
 
 **Requirements:**
-- `--scan-dir`, `--source`, `--target`, and `--index-db` are all required.
+- `--scan-dir` and `--lang` are required. `--index-path` is optional and defaults to `indexes_root()` (the system data directory) when omitted.
+- Source language is always `en_us`.
 - Scans all direct child directories under `--scan-dir`; each is treated as one mod.
 - Skips mods with missing source or target language files (prints a warning).
-- Fails if `--index-db` already exists (unless a future `--force` option is used).
+- Fails if the index already exists (unless a future `--force` option is used).
 
 ### Querying Translations
 
 ```bash
-packtrans-glossary query "Cooking Pot" \
-  --index-db indexes/zh_cn \
+packtrans-glossary --index-path indexes --lang zh_cn query "Cooking Pot" \
   --limit 20
 ```
 
 **Requirements:**
-- Query text and `--index-db` are required.
+- `--index-path`, `--lang`, and query text are required.
 - `--limit` is optional; defaults to `20`.
 - No need to specify source/target language or mod ID—these are stored in the index.
 
@@ -109,19 +107,15 @@ cargo check
 
 ```bash
 # Build index
-cargo run --bin packtrans-glossary-builder -- index \
+cargo run --bin packtrans-glossary-builder -- --index-path indexes index \
   --scan-dir res \
-  --source en_us \
-  --target zh_cn \
-  --index-db indexes/zh_cn
+  --lang zh_cn
 
 # Query index
-cargo run --bin packtrans-glossary -- query "Cooking Pot" \
-  --index-db indexes/zh_cn \
+cargo run --bin packtrans-glossary -- --index-path indexes --lang zh_cn query "Cooking Pot" \
   --limit 10
 
-cargo run --bin packtrans-glossary -- query "Stove" \
-  --index-db indexes/zh_cn \
+cargo run --bin packtrans-glossary -- --index-path indexes --lang zh_cn query "Stove" \
   --limit 10
 ```
 

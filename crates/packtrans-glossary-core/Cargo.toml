@@ -9,4 +9,5 @@ lindera.workspace = true
 lindera-tantivy.workspace = true
 serde_json.workspace = true
 tantivy.workspace = true
-tantivy-jieba.workspace = true
+ureq.workspace = true
+zip.workspace = true

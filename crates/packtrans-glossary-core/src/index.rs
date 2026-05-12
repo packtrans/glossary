@@ -3,16 +3,49 @@ use std::{collections::HashMap, fs, path::PathBuf};
 use anyhow::{Context, Result, bail};
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
-use crate::schema::{build_schema, target_tokenizer_name};
+use crate::dictionary;
+use crate::schema::build_schema;
+use crate::tokenizer;
 
-pub struct IndexOptions {
-    pub scan_dir: PathBuf,
-    pub source: String,
-    pub target: String,
-    pub index_db: PathBuf,
+/// Returns the root directory where search indexes are stored.
+pub fn indexes_root() -> Result<PathBuf> {
+    Ok(dictionary::data_dir()?
+        .join("packtrans-glossary")
+        .join("indexes"))
 }
 
+/// Validates that `lang` is a non-empty string without path traversal characters.
+pub(crate) fn validate_lang(lang: &str) -> Result<()> {
+    if lang.is_empty() {
+        bail!("lang must not be empty");
+    }
+    if lang.contains("..") || lang.contains('/') || lang.contains('\\') {
+        bail!("lang contains invalid characters: {}", lang);
+    }
+    Ok(())
+}
+
+/// Options for building a search index.
+pub struct IndexOptions {
+    /// Directory containing mod folders with language files.
+    pub scan_dir: PathBuf,
+    /// Target language code (used to locate tokenizer and output sub-directory).
+    pub lang: String,
+    /// Custom path for the index output. Uses [`indexes_root`] if `None`.
+    pub index_path: Option<PathBuf>,
+    /// Custom base path for dictionary lookup.
+    pub dict_path: Option<PathBuf>,
+}
+
+/// Builds a Tantivy index from language files in `scan_dir`.
+///
+/// Each mod folder is expected to contain `en_us.json` and `{lang}.json`.
 pub fn build_index(options: IndexOptions) -> Result<()> {
+    validate_lang(&options.lang)?;
+    let index_path = match options.index_path {
+        Some(path) => path,
+        None => indexes_root()?,
+    };
     if !options.scan_dir.is_dir() {
         bail!(
             "scan dir does not exist or is not a directory: {}",
@@ -20,14 +53,24 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
         );
     }
 
-    if options.index_db.exists() && options.index_db.read_dir()?.next().is_some() {
-        bail!(
-            "index db already exists and is not empty: {}",
-            options.index_db.display()
-        );
+    let index_dir = index_path.join(&options.lang);
+
+    if let Ok(metadata) = index_dir.metadata() {
+        if !metadata.is_dir() {
+            bail!(
+                "index db already exists and is not empty: {}",
+                index_dir.display()
+            );
+        }
+        if index_dir.read_dir()?.next().is_some() {
+            bail!(
+                "index db already exists and is not empty: {}",
+                index_dir.display()
+            );
+        }
     }
 
-    if let Some(parent) = options.index_db.parent() {
+    if let Some(parent) = index_dir.parent() {
         fs::create_dir_all(parent).with_context(|| {
             format!(
                 "failed to create index db parent directory: {}",
@@ -35,24 +78,20 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
             )
         })?;
     }
-    fs::create_dir_all(&options.index_db).with_context(|| {
+    fs::create_dir_all(&index_dir).with_context(|| {
         format!(
             "failed to create index db directory: {}",
-            options.index_db.display()
+            index_dir.display()
         )
     })?;
 
-    let (schema, fields) = build_schema(&options.target);
-    let dir = MmapDirectory::open(&options.index_db).with_context(|| {
-        format!(
-            "failed to open index directory: {}",
-            options.index_db.display()
-        )
-    })?;
+    let (schema, fields) = build_schema(&options.lang);
+    let dir = MmapDirectory::open(&index_dir)
+        .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;
     let index = Index::create(dir, schema, IndexSettings::default())
-        .with_context(|| format!("failed to create index: {}", options.index_db.display()))?;
+        .with_context(|| format!("failed to create index: {}", index_dir.display()))?;
 
-    register_tokenizers(&index, &options.target)?;
+    tokenizer::register_for_language(&index, &options.lang, options.dict_path.as_deref())?;
 
     let mut writer = index.writer(50_000_000)?;
 
@@ -69,8 +108,8 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
         }
 
         let mod_id = entry.file_name().to_string_lossy().into_owned();
-        let source_path = mod_dir.join(format!("{}.json", options.source));
-        let target_path = mod_dir.join(format!("{}.json", options.target));
+        let source_path = mod_dir.join("en_us.json");
+        let target_path = mod_dir.join(format!("{}.json", options.lang));
 
         if !source_path.is_file() || !target_path.is_file() {
             eprintln!(
@@ -93,9 +132,9 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
             let mut doc = TantivyDocument::default();
             doc.add_text(fields.mod_id, &mod_id);
             doc.add_text(fields.key, &key);
-            doc.add_text(fields.source_lang, &options.source);
+            doc.add_text(fields.source_lang, "en_us");
             doc.add_text(fields.source_text, &source_text);
-            doc.add_text(fields.target_lang, &options.target);
+            doc.add_text(fields.target_lang, &options.lang);
             doc.add_text(fields.target_text, target_text);
             writer.add_document(doc)?;
             indexed_docs += 1;
@@ -113,36 +152,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
     Ok(())
 }
 
-fn register_tokenizers(index: &Index, target_language: &str) -> Result<()> {
-    match target_tokenizer_name(target_language) {
-        "jieba" => {
-            index
-                .tokenizers()
-                .register("jieba", tantivy_jieba::JiebaTokenizer::new());
-        }
-        "lindera" => {
-            let dictionary = lindera::dictionary::load_dictionary("embedded://ipadic")
-                .with_context(|| "failed to load IPADIC dictionary")?;
-            let segmenter =
-                lindera::segmenter::Segmenter::new(lindera::mode::Mode::Normal, dictionary, None);
-            let tokenizer =
-                lindera_tantivy::tokenizer::LinderaTokenizer::from_segmenter(segmenter);
-            index.tokenizers().register("lindera", tokenizer);
-        }
-        "lindera_ko" => {
-            let dictionary = lindera::dictionary::load_dictionary("embedded://ko-dic")
-                .with_context(|| "failed to load KoDic dictionary")?;
-            let segmenter =
-                lindera::segmenter::Segmenter::new(lindera::mode::Mode::Normal, dictionary, None);
-            let tokenizer =
-                lindera_tantivy::tokenizer::LinderaTokenizer::from_segmenter(segmenter);
-            index.tokenizers().register("lindera_ko", tokenizer);
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
+/// Loads a JSON language file into a key-value map.
 fn load_language_file(path: &PathBuf) -> Result<HashMap<String, String>> {
     let file = fs::File::open(path)
         .with_context(|| format!("failed to open language file: {}", path.display()))?;
