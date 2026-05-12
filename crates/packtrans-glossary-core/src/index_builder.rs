@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs, path::PathBuf};
 use anyhow::{Context, Result, bail};
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
-use crate::schema::build_schema;
+use crate::schema::{build_schema, target_tokenizer_name};
 
 pub struct IndexOptions {
     pub scan_dir: PathBuf,
@@ -42,7 +42,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
         )
     })?;
 
-    let (schema, fields) = build_schema();
+    let (schema, fields) = build_schema(&options.target);
     let dir = MmapDirectory::open(&options.index_db).with_context(|| {
         format!(
             "failed to open index directory: {}",
@@ -51,6 +51,9 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
     })?;
     let index = Index::create(dir, schema, IndexSettings::default())
         .with_context(|| format!("failed to create index: {}", options.index_db.display()))?;
+
+    register_tokenizers(&index, &options.target)?;
+
     let mut writer = index.writer(50_000_000)?;
 
     let mut indexed_mods = 0usize;
@@ -107,6 +110,36 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
     writer.commit()?;
     println!("indexed {indexed_docs} documents from {indexed_mods} mods");
 
+    Ok(())
+}
+
+fn register_tokenizers(index: &Index, target_language: &str) -> Result<()> {
+    match target_tokenizer_name(target_language) {
+        "jieba" => {
+            index
+                .tokenizers()
+                .register("jieba", tantivy_jieba::JiebaTokenizer::new());
+        }
+        "lindera" => {
+            let dictionary = lindera::dictionary::load_dictionary("embedded://ipadic")
+                .with_context(|| "failed to load IPADIC dictionary")?;
+            let segmenter =
+                lindera::segmenter::Segmenter::new(lindera::mode::Mode::Normal, dictionary, None);
+            let tokenizer =
+                lindera_tantivy::tokenizer::LinderaTokenizer::from_segmenter(segmenter);
+            index.tokenizers().register("lindera", tokenizer);
+        }
+        "lindera_ko" => {
+            let dictionary = lindera::dictionary::load_dictionary("embedded://ko-dic")
+                .with_context(|| "failed to load KoDic dictionary")?;
+            let segmenter =
+                lindera::segmenter::Segmenter::new(lindera::mode::Mode::Normal, dictionary, None);
+            let tokenizer =
+                lindera_tantivy::tokenizer::LinderaTokenizer::from_segmenter(segmenter);
+            index.tokenizers().register("lindera_ko", tokenizer);
+        }
+        _ => {}
+    }
     Ok(())
 }
 

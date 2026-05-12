@@ -5,5 +5,8 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+lindera.workspace = true
+lindera-tantivy.workspace = true
 serde_json.workspace = true
 tantivy.workspace = true
+tantivy-jieba.workspace = true
