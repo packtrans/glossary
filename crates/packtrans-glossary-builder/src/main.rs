@@ -10,6 +10,12 @@ use packtrans_glossary_core::{IndexOptions, build_index};
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+
+    #[arg(long)]
+    dict_path: Option<PathBuf>,
+
+    #[arg(long)]
+    index_path: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -22,22 +28,17 @@ struct IndexCommand {
     #[arg(long)]
     scan_dir: PathBuf,
     #[arg(long)]
-    source: String,
-    #[arg(long)]
-    target: String,
-    #[arg(long)]
-    index_db: PathBuf,
+    lang: String,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-
     match cli.command {
-        Commands::Index(command) => build_index(IndexOptions {
-            scan_dir: command.scan_dir,
-            source: command.source,
-            target: command.target,
-            index_db: command.index_db,
+        Commands::Index(cmd) => build_index(IndexOptions {
+            scan_dir: cmd.scan_dir,
+            lang: cmd.lang,
+            index_path: cli.index_path,
+            dict_path: cli.dict_path,
         }),
     }
 }
