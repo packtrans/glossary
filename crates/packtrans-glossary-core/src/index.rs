@@ -3,13 +3,13 @@ use std::{collections::HashMap, fs, path::PathBuf};
 use anyhow::{Context, Result, bail};
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
-use crate::dictionary;
 use crate::schema::build_schema;
 use crate::tokenizer;
+use crate::util;
 
 /// Returns the root directory where search indexes are stored.
 pub fn indexes_root() -> Result<PathBuf> {
-    Ok(dictionary::data_dir()?
+    Ok(util::data_dir()?
         .join("packtrans-glossary")
         .join("indexes"))
 }
@@ -58,7 +58,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
     if let Ok(metadata) = index_dir.metadata() {
         if !metadata.is_dir() {
             bail!(
-                "index db already exists and is not empty: {}",
+                "index db path already exists and is not a directory: {}",
                 index_dir.display()
             );
         }

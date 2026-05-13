@@ -27,37 +27,9 @@ pub fn current_version() -> &'static str {
     lindera::get_version()
 }
 
-/// Returns the platform-specific data directory.
-///
-/// - macOS: `~/Library/Application Support`
-/// - Windows: `%LOCALAPPDATA%`
-/// - Linux/Other: `$XDG_DATA_HOME` or `~/.local/share`
-pub fn data_dir() -> Result<PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        let home = std::env::var("HOME").context("HOME environment variable not set")?;
-        Ok(PathBuf::from(home).join("Library/Application Support"))
-    }
-    #[cfg(target_os = "windows")]
-    {
-        std::env::var("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .context("LOCALAPPDATA environment variable not set")
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        std::env::var("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .or_else(|_| {
-                let home = std::env::var("HOME").context("HOME environment variable not set")?;
-                Ok(PathBuf::from(home).join(".local/share"))
-            })
-    }
-}
-
 /// Returns the root directory where dictionaries are stored.
-fn dictionaries_root() -> Result<PathBuf> {
-    Ok(data_dir()?.join("packtrans-glossary").join("dictionaries"))
+pub fn dictionaries_root() -> Result<PathBuf> {
+    Ok(crate::util::data_dir()?.join("packtrans-glossary").join("dictionaries"))
 }
 
 /// Resolves the dictionary root, using `base` if provided or falling back to [`dictionaries_root`].
