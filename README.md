@@ -63,7 +63,7 @@ packtrans-glossary-builder --index-path indexes index \
 ### Querying Translations
 
 ```bash
-packtrans-glossary --index-path indexes --lang zh_cn query "Cooking Pot" \
+packtrans-glossary --index-path indexes query --lang zh_cn "Cooking Pot" \
   --limit 20
 ```
 
@@ -112,10 +112,10 @@ cargo run --bin packtrans-glossary-builder -- --index-path indexes index \
   --lang zh_cn
 
 # Query index
-cargo run --bin packtrans-glossary -- --index-path indexes --lang zh_cn query "Cooking Pot" \
+cargo run --bin packtrans-glossary -- --index-path indexes query --lang zh_cn "Cooking Pot" \
   --limit 10
 
-cargo run --bin packtrans-glossary -- --index-path indexes --lang zh_cn query "Stove" \
+cargo run --bin packtrans-glossary -- --index-path indexes query --lang zh_cn "Stove" \
   --limit 10
 ```
 

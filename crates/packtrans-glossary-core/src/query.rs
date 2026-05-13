@@ -58,26 +58,39 @@ pub fn query_index(options: QueryOptions) -> Result<()> {
     let parsed_query = query_parser.parse_query(&options.query)?;
     let top_docs = searcher.search(&parsed_query, &TopDocs::with_limit(options.limit))?;
 
+    // Column semantics follow the query direction, not fixed language roles:
+    //   source      = the language the query was written in (input)
+    //   source_lang = the language code of the *source* column
+    //   target      = the language the result is returned in (output)
+    //   target_lang = the language code of the *target* column
+    // The header is intentionally static so that downstream parsers don't
+    // have to branch on --inverse.
     let (out_src_field, out_tgt_field) = if options.inverse {
         (fields.target_text, fields.source_text)
     } else {
         (fields.source_text, fields.target_text)
     };
-    let out_lang_field = if options.inverse {
+    let out_src_lang_field = if options.inverse {
+        fields.target_lang
+    } else {
+        fields.source_lang
+    };
+    let out_tgt_lang_field = if options.inverse {
         fields.source_lang
     } else {
         fields.target_lang
     };
 
-    println!("confidence\tmod_id\tkey\tsource\ttarget_lang\ttarget");
+    println!("confidence\tmod_id\tkey\tsource\tsource_lang\ttarget_lang\ttarget");
     for (score, address) in top_docs {
         let doc: TantivyDocument = searcher.doc(address)?;
         println!(
-            "{score:.2}\t{}\t{}\t{}\t{}\t{}",
+            "{score:.2}\t{}\t{}\t{}\t{}\t{}\t{}",
             stored_text(&doc, fields.mod_id),
             stored_text(&doc, fields.key),
             stored_text(&doc, out_src_field),
-            stored_text(&doc, out_lang_field),
+            stored_text(&doc, out_src_lang_field),
+            stored_text(&doc, out_tgt_lang_field),
             stored_text(&doc, out_tgt_field)
         );
     }
