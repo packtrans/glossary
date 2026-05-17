@@ -7,12 +7,12 @@ use crate::dictionary;
 
 /// Returns the tokenizer name to use for a given target language code.
 ///
-/// - `zh*` → [`dictionary::JIEBA`]
+/// - `lzh`, `zh*` → [`dictionary::JIEBA`]
 /// - `ja*` → [`dictionary::IPADIC`]
 /// - `ko*` → [`dictionary::KO_DIC`]
 /// - otherwise → `"default"`
 pub(crate) fn target_tokenizer_name(target_language: &str) -> &'static str {
-    if target_language.starts_with("zh") {
+    if target_language == "lzh" || target_language.starts_with("zh") {
         dictionary::JIEBA
     } else if target_language.starts_with("ja") {
         dictionary::IPADIC
