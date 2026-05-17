@@ -7,6 +7,9 @@ edition.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 packtrans-glossary-core = { path = "../packtrans-glossary-core" }
+serde_json.workspace = true
+ureq = { workspace = true, features = ["json"] }
+indicatif = "0.17"
 
 [[bin]]
 name = "packtrans-glossary-builder"
