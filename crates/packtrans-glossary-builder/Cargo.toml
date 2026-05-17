@@ -10,6 +10,7 @@ packtrans-glossary-core = { path = "../packtrans-glossary-core" }
 serde_json.workspace = true
 ureq = { workspace = true, features = ["json"] }
 indicatif = "0.17"
+zip.workspace = true
 
 [[bin]]
 name = "packtrans-glossary-builder"

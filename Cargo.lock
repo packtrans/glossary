@@ -1778,6 +1778,7 @@ dependencies = [
  "packtrans-glossary-core",
  "serde_json",
  "ureq",
+ "zip",
 ]
 
 [[package]]
