@@ -159,12 +159,14 @@ fn download_modrinth(
     Ok(())
 }
 
+const MODRINTH_VERSION_CHUNK_SIZE: usize = 100;
+
 fn fetch_modrinth_versions(
     client: &ureq::Agent,
     ids: &[String],
     versions: &mut HashMap<String, serde_json::Value>,
 ) -> Result<()> {
-    for chunk in ids.chunks(100) {
+    for chunk in ids.chunks(MODRINTH_VERSION_CHUNK_SIZE) {
         fetch_modrinth_versions_chunk(client, chunk, versions)?;
     }
     Ok(())
@@ -179,10 +181,11 @@ fn fetch_modrinth_versions_chunk(
         return Ok(());
     }
 
-    let body = serde_json::json!({ "ids": ids });
+    let ids_json = serde_json::to_string(ids)?;
     match client
-        .post("https://api.modrinth.com/v2/versions")
-        .send_json(body)
+        .get("https://api.modrinth.com/v2/versions")
+        .query("ids", &ids_json)
+        .call()
     {
         Ok(response) => {
             let json: serde_json::Value = response.into_json()?;
@@ -195,15 +198,6 @@ fn fetch_modrinth_versions_chunk(
                 }
             }
             Ok(())
-        }
-        Err(err) if ids.len() > 1 => {
-            let mid = ids.len() / 2;
-            eprintln!(
-                "warning: Modrinth batch of {} failed ({err}); retrying with smaller batches",
-                ids.len()
-            );
-            fetch_modrinth_versions_chunk(client, &ids[..mid], versions)?;
-            fetch_modrinth_versions_chunk(client, &ids[mid..], versions)
         }
         Err(err) => {
             eprintln!(
