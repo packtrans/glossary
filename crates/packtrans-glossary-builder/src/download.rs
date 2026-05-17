@@ -26,16 +26,16 @@ pub fn download(cmd: DownloadCommand) -> Result<()> {
     match cmd.platform {
         Platform::Curseforge => {
             let file = cmd
-                .file
+                .list_file
                 .as_ref()
-                .context("--file is required for curseforge downloads")?;
+                .context("--list-file is required for curseforge downloads")?;
             download_curseforge(&client, file, &cmd.output, &temp_path)
         }
         Platform::Modrinth => {
             let file = cmd
-                .file
+                .list_file
                 .as_ref()
-                .context("--file is required for modrinth downloads")?;
+                .context("--list-file is required for modrinth downloads")?;
             download_modrinth(&client, file, &cmd.output, &temp_path)
         }
         Platform::Minecraft => download_minecraft(&client, &cmd.output, &temp_path),

@@ -49,8 +49,8 @@ pub struct DownloadCommand {
     pub output: PathBuf,
     #[arg(long)]
     pub temp_path: Option<PathBuf>,
-    #[arg(short, long)]
-    pub file: Option<PathBuf>,
+    #[arg(short = 'f', long)]
+    pub list_file: Option<PathBuf>,
 }
 
 #[derive(Clone, ValueEnum)]
