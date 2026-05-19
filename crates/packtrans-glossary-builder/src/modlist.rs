@@ -72,9 +72,6 @@ fn fetch_modrinth_mod_list(output: &PathBuf, count: usize) -> Result<()> {
     pb.finish_with_message("done");
 
     let count = mods.len();
-    if let Some(parent) = output.parent() {
-        fs::create_dir_all(parent)?;
-    }
     fs::write(
         output,
         serde_json::to_string_pretty(&serde_json::Value::Array(mods))?,
@@ -104,9 +101,7 @@ fn fetch_curseforge_mod_list(output: &PathBuf, count: usize) -> Result<()> {
         .map_err(|_| anyhow::anyhow!("CURSEFORGE_API_KEY environment variable not set"))?;
 
     let mut mods = Vec::new();
-    let client = ureq::AgentBuilder::new()
-        .timeout(std::time::Duration::from_secs(30))
-        .build();
+    let client = http_client();
 
     let pb = progress_bar(count as u64, "fetching mods");
 
@@ -175,9 +170,6 @@ fn fetch_curseforge_mod_list(output: &PathBuf, count: usize) -> Result<()> {
     pb.finish_with_message("done");
 
     let count = mods.len();
-    if let Some(parent) = output.parent() {
-        fs::create_dir_all(parent)?;
-    }
     fs::write(
         output,
         serde_json::to_string_pretty(&serde_json::Value::Array(mods))?,

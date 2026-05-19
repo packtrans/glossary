@@ -143,10 +143,11 @@ pub fn find_best_lang_dir(extracted_dir: &Path) -> Result<PathBuf> {
                     == Some("assets")
             {
                 let count = count_json_files(&path)?;
-                if best
-                    .as_ref()
-                    .map(|(_, best_count)| count > *best_count)
-                    .unwrap_or(true)
+                if count > 0
+                    && best
+                        .as_ref()
+                        .map(|(_, best_count)| count > *best_count)
+                        .unwrap_or(true)
                 {
                     *best = Some((path.clone(), count));
                 }

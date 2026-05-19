@@ -242,6 +242,15 @@ fn download_mod_jar_lang(
             .with_context(|| format!("failed to clear {}", output_dir.display()))?;
     }
     copy_dir_contents(&lang_dir, &output_dir)?;
+    // Keep jar_path as a download cache; drop the larger extracted tree after copying.
+    if extracted_dir.exists() {
+        fs::remove_dir_all(&extracted_dir).with_context(|| {
+            format!(
+                "failed to remove temp extract dir {}",
+                extracted_dir.display()
+            )
+        })?;
+    }
     Ok(())
 }
 
