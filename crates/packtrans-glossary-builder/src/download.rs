@@ -140,6 +140,7 @@ fn download_modrinth(
                 "warning: missing Modrinth metadata for version {} ({})",
                 mod_entry.version_id, mod_entry.slug
             );
+            failures.push(mod_entry.slug.clone());
             pb.inc(1);
             continue;
         };
@@ -149,6 +150,7 @@ fn download_modrinth(
                 "warning: no downloadable jar for Modrinth mod {}",
                 mod_entry.slug
             );
+            failures.push(mod_entry.slug.clone());
             pb.inc(1);
             continue;
         };
@@ -349,6 +351,7 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
         .filter(|(key, _)| key.starts_with("minecraft/lang/") && key.ends_with(".json"))
         .collect();
     let pb = progress_bar(lang_objects.len() as u64, "downloading Minecraft assets");
+    let mut failures = Vec::new();
 
     for (key, object) in lang_objects {
         let filename = key.rsplit('/').next().unwrap_or(key);
@@ -359,11 +362,13 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
 
         let Some(hash) = object.get("hash").and_then(|v| v.as_str()) else {
             eprintln!("warning: Minecraft asset {key} is missing hash");
+            failures.push(key.to_string());
             pb.inc(1);
             continue;
         };
         if hash.len() < 2 {
             eprintln!("warning: Minecraft asset {key} has invalid hash {hash}");
+            failures.push(key.to_string());
             pb.inc(1);
             continue;
         }
@@ -373,12 +378,20 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
             &hash[..2],
             hash
         );
-        download_to_file(client, &url, &minecraft_output.join(filename))
-            .with_context(|| format!("failed to download Minecraft asset {key}"))?;
+        if let Err(err) = download_to_file(client, &url, &minecraft_output.join(filename)) {
+            eprintln!("warning: failed to download Minecraft asset {key}: {err:#}");
+            failures.push(key.to_string());
+        }
         pb.inc(1);
     }
 
     pb.finish_with_message("done");
+    anyhow::ensure!(
+        failures.is_empty(),
+        "failed to download {} Minecraft asset(s): {}",
+        failures.len(),
+        failures.join(", ")
+    );
     Ok(())
 }
 
