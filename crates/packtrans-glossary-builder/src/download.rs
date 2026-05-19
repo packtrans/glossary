@@ -94,6 +94,7 @@ fn download_curseforge(
             client,
             "curseforge",
             &mod_entry.slug,
+            &mod_entry.version_id,
             output,
             temp_path,
             &format!(
@@ -155,8 +156,15 @@ fn download_modrinth(
             continue;
         };
 
-        if let Err(err) =
-            download_mod_jar_lang(client, "modrinth", &mod_entry.slug, output, temp_path, url)
+        if let Err(err) = download_mod_jar_lang(
+            client,
+            "modrinth",
+            &mod_entry.slug,
+            &mod_entry.version_id,
+            output,
+            temp_path,
+            url,
+        )
         {
             eprintln!(
                 "warning: failed to download Modrinth mod {}: {err:#}",
@@ -252,17 +260,22 @@ fn download_mod_jar_lang(
     client: &ureq::Agent,
     platform: &str,
     slug: &str,
+    version_id: &str,
     output: &Path,
     temp_path: &Path,
     url: &str,
 ) -> Result<()> {
     let slug = sanitize_path_part(slug);
+    let version_id = sanitize_path_part(version_id);
     let temp_mods = temp_path.join("mods");
-    let jar_path = temp_mods.join(format!("{platform}-{slug}.jar"));
-    let extracted_dir = temp_mods.join(format!("{platform}-{slug}"));
+    let cache_key = format!("{platform}-{slug}-{version_id}");
+    let jar_path = temp_mods.join(format!("{cache_key}.jar"));
+    let extracted_dir = temp_mods.join(&cache_key);
     let output_dir = output.join(format!("{platform}-{slug}"));
 
-    download_to_file(client, url, &jar_path).context("failed jar download")?;
+    if !jar_path.exists() {
+        download_to_file(client, url, &jar_path).context("failed jar download")?;
+    }
     extract_zip_file(&jar_path, &extracted_dir)?;
     let lang_dir = find_best_lang_dir(&extracted_dir).context("missing lang folder")?;
     if output_dir.exists() {
