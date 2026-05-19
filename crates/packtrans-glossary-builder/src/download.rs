@@ -89,7 +89,7 @@ fn download_curseforge(
 
     for mod_entry in mods {
         pb.set_message(format!("downloading {}", mod_entry.slug));
-        if let Err(err) = download_mod_jar_lang(
+        download_mod_jar_lang(
             client,
             "curseforge",
             &mod_entry.slug,
@@ -99,12 +99,8 @@ fn download_curseforge(
                 "https://www.curseforge.com/api/v1/mods/{}/files/{}/download",
                 mod_entry.id, mod_entry.version_id
             ),
-        ) {
-            eprintln!(
-                "warning: failed to download CurseForge mod {}: {err:#}",
-                mod_entry.slug
-            );
-        }
+        )
+        .with_context(|| format!("failed to download CurseForge mod {}", mod_entry.slug))?;
         pb.inc(1);
     }
 
@@ -144,14 +140,8 @@ fn download_modrinth(
             continue;
         };
 
-        if let Err(err) =
-            download_mod_jar_lang(client, "modrinth", &mod_entry.slug, output, temp_path, url)
-        {
-            eprintln!(
-                "warning: failed to download Modrinth mod {}: {err:#}",
-                mod_entry.slug
-            );
-        }
+        download_mod_jar_lang(client, "modrinth", &mod_entry.slug, output, temp_path, url)
+            .with_context(|| format!("failed to download Modrinth mod {}", mod_entry.slug))?;
         pb.inc(1);
     }
 
@@ -199,13 +189,12 @@ fn fetch_modrinth_versions_chunk(
             }
             Ok(())
         }
-        Err(err) => {
-            eprintln!(
-                "warning: failed to fetch Modrinth metadata for {}: {err}",
+        Err(err) => Err(err).with_context(|| {
+            format!(
+                "failed to fetch Modrinth metadata for chunk starting with {}",
                 ids[0]
-            );
-            Ok(())
-        }
+            )
+        }),
     }
 }
 
@@ -248,6 +237,10 @@ fn download_mod_jar_lang(
     download_to_file(client, url, &jar_path).context("failed jar download")?;
     extract_zip_file(&jar_path, &extracted_dir)?;
     let lang_dir = find_best_lang_dir(&extracted_dir).context("missing lang folder")?;
+    if output_dir.exists() {
+        fs::remove_dir_all(&output_dir)
+            .with_context(|| format!("failed to clear {}", output_dir.display()))?;
+    }
     copy_dir_contents(&lang_dir, &output_dir)?;
     Ok(())
 }
@@ -284,6 +277,10 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
         .context("failed to parse Minecraft version metadata")?;
 
     let minecraft_output = output.join("minecraft");
+    if minecraft_output.exists() {
+        fs::remove_dir_all(&minecraft_output)
+            .with_context(|| format!("failed to clear {}", minecraft_output.display()))?;
+    }
     fs::create_dir_all(&minecraft_output)?;
 
     let client_url = version
@@ -341,9 +338,8 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
             &hash[..2],
             hash
         );
-        if let Err(err) = download_to_file(client, &url, &minecraft_output.join(filename)) {
-            eprintln!("warning: failed to download Minecraft asset {key}: {err:#}");
-        }
+        download_to_file(client, &url, &minecraft_output.join(filename))
+            .with_context(|| format!("failed to download Minecraft asset {key}"))?;
         pb.inc(1);
     }
 
