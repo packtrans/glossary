@@ -86,10 +86,11 @@ fn download_curseforge(
 ) -> Result<()> {
     let mods = read_mod_list(file)?;
     let pb = progress_bar(mods.len() as u64, "downloading CurseForge mods");
+    let mut failures = Vec::new();
 
     for mod_entry in mods {
         pb.set_message(format!("downloading {}", mod_entry.slug));
-        download_mod_jar_lang(
+        if let Err(err) = download_mod_jar_lang(
             client,
             "curseforge",
             &mod_entry.slug,
@@ -99,12 +100,23 @@ fn download_curseforge(
                 "https://www.curseforge.com/api/v1/mods/{}/files/{}/download",
                 mod_entry.id, mod_entry.version_id
             ),
-        )
-        .with_context(|| format!("failed to download CurseForge mod {}", mod_entry.slug))?;
+        ) {
+            eprintln!(
+                "warning: failed to download CurseForge mod {}: {err:#}",
+                mod_entry.slug
+            );
+            failures.push(mod_entry.slug);
+        }
         pb.inc(1);
     }
 
     pb.finish_with_message("done");
+    anyhow::ensure!(
+        failures.is_empty(),
+        "failed to download {} CurseForge mod(s): {}",
+        failures.len(),
+        failures.join(", ")
+    );
     Ok(())
 }
 
@@ -120,6 +132,7 @@ fn download_modrinth(
     fetch_modrinth_versions(client, &version_ids, &mut versions)?;
 
     let pb = progress_bar(mods.len() as u64, "downloading Modrinth mods");
+    let mut failures = Vec::new();
     for mod_entry in mods {
         pb.set_message(format!("downloading {}", mod_entry.slug));
         let Some(version) = versions.get(&mod_entry.version_id) else {
@@ -140,12 +153,25 @@ fn download_modrinth(
             continue;
         };
 
-        download_mod_jar_lang(client, "modrinth", &mod_entry.slug, output, temp_path, url)
-            .with_context(|| format!("failed to download Modrinth mod {}", mod_entry.slug))?;
+        if let Err(err) =
+            download_mod_jar_lang(client, "modrinth", &mod_entry.slug, output, temp_path, url)
+        {
+            eprintln!(
+                "warning: failed to download Modrinth mod {}: {err:#}",
+                mod_entry.slug
+            );
+            failures.push(mod_entry.slug);
+        }
         pb.inc(1);
     }
 
     pb.finish_with_message("done");
+    anyhow::ensure!(
+        failures.is_empty(),
+        "failed to download {} Modrinth mod(s): {}",
+        failures.len(),
+        failures.join(", ")
+    );
     Ok(())
 }
 
