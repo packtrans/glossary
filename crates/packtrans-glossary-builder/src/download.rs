@@ -130,7 +130,9 @@ fn download_modrinth(
     let mods = read_mod_list(file)?;
     let mut versions = HashMap::new();
     let version_ids: Vec<String> = mods.iter().map(|item| item.version_id.clone()).collect();
-    fetch_modrinth_versions(client, &version_ids, &mut versions)?;
+    if let Err(err) = fetch_modrinth_versions(client, &version_ids, &mut versions) {
+        eprintln!("warning: failed to fetch Modrinth version metadata: {err:#}");
+    }
 
     let pb = progress_bar(mods.len() as u64, "downloading Modrinth mods");
     let mut failures = Vec::new();
@@ -193,7 +195,9 @@ fn fetch_modrinth_versions(
     versions: &mut HashMap<String, serde_json::Value>,
 ) -> Result<()> {
     for chunk in ids.chunks(MODRINTH_VERSION_CHUNK_SIZE) {
-        fetch_modrinth_versions_chunk(client, chunk, versions)?;
+        if let Err(err) = fetch_modrinth_versions_chunk(client, chunk, versions) {
+            eprintln!("warning: {err:#}");
+        }
     }
     Ok(())
 }
@@ -273,15 +277,16 @@ fn download_mod_jar_lang(
     let extracted_dir = temp_mods.join(&cache_key);
     let output_dir = output.join(format!("{platform}-{slug}"));
 
+    if output_dir.exists() {
+        fs::remove_dir_all(&output_dir)
+            .with_context(|| format!("failed to clear {}", output_dir.display()))?;
+    }
+
     if !jar_path.exists() {
         download_to_file(client, url, &jar_path).context("failed jar download")?;
     }
     extract_zip_file(&jar_path, &extracted_dir)?;
     let lang_dir = find_best_lang_dir(&extracted_dir).context("missing lang folder")?;
-    if output_dir.exists() {
-        fs::remove_dir_all(&output_dir)
-            .with_context(|| format!("failed to clear {}", output_dir.display()))?;
-    }
     copy_dir_contents(&lang_dir, &output_dir)?;
     // Keep jar_path as a download cache; drop the larger extracted tree after copying.
     if extracted_dir.exists() {
@@ -339,8 +344,12 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
         .and_then(|v| v.get("url"))
         .and_then(|v| v.as_str())
         .context("Minecraft version metadata missing downloads.client.url")?;
-    let client_jar = temp_path.join("minecraft").join("client.jar");
-    download_to_file(client, client_url, &client_jar)?;
+    let client_jar = temp_path
+        .join("minecraft")
+        .join(format!("client-{}.jar", sanitize_path_part(latest_release)));
+    if !client_jar.exists() {
+        download_to_file(client, client_url, &client_jar).context("failed Minecraft client jar download")?;
+    }
     extract_minecraft_en_us(&client_jar, &minecraft_output.join("en_us.json"))?;
 
     let asset_index_url = version

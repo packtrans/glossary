@@ -56,16 +56,30 @@ pub fn download_to_file(client: &ureq::Agent, url: &str, path: &Path) -> Result<
         fs::create_dir_all(parent)?;
     }
 
-    let response = client
-        .get(url)
-        .call()
-        .with_context(|| format!("failed to download {url}"))?;
-    let mut reader = response.into_reader();
-    let mut file =
-        File::create(path).with_context(|| format!("failed to create {}", path.display()))?;
-    io::copy(&mut reader, &mut file)
-        .with_context(|| format!("failed to write {}", path.display()))?;
-    Ok(())
+    let temp_path = PathBuf::from(format!("{}.tmp", path.display()));
+    let download_result = (|| {
+        let response = client
+            .get(url)
+            .call()
+            .with_context(|| format!("failed to download {url}"))?;
+        let mut reader = response.into_reader();
+        let mut file = File::create(&temp_path)
+            .with_context(|| format!("failed to create {}", temp_path.display()))?;
+        io::copy(&mut reader, &mut file)
+            .with_context(|| format!("failed to write {}", temp_path.display()))?;
+        fs::rename(&temp_path, path).with_context(|| {
+            format!(
+                "failed to move {} to {}",
+                temp_path.display(),
+                path.display()
+            )
+        })
+    })();
+
+    if download_result.is_err() && temp_path.exists() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    download_result
 }
 
 /// Extracts the contents of a zip archive to a directory.
