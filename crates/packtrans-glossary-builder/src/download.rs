@@ -21,7 +21,8 @@ pub fn download(cmd: DownloadCommand) -> Result<()> {
     let temp_path = cmd
         .temp_path
         .unwrap_or_else(|| env::temp_dir().join("packtrans-glossary"));
-    let client = crate::util::http_client();
+    let api_client = crate::util::http_client();
+    let download_client = crate::util::http_download_client();
 
     match cmd.platform {
         Platform::Curseforge => {
@@ -29,16 +30,18 @@ pub fn download(cmd: DownloadCommand) -> Result<()> {
                 .list_file
                 .as_ref()
                 .context("--list-file is required for curseforge downloads")?;
-            download_curseforge(&client, file, &cmd.output, &temp_path)
+            download_curseforge(&download_client, file, &cmd.output, &temp_path)
         }
         Platform::Modrinth => {
             let file = cmd
                 .list_file
                 .as_ref()
                 .context("--list-file is required for modrinth downloads")?;
-            download_modrinth(&client, file, &cmd.output, &temp_path)
+            download_modrinth(&api_client, &download_client, file, &cmd.output, &temp_path)
         }
-        Platform::Minecraft => download_minecraft(&client, &cmd.output, &temp_path),
+        Platform::Minecraft => {
+            download_minecraft(&api_client, &download_client, &cmd.output, &temp_path)
+        }
     }
 }
 
@@ -79,7 +82,7 @@ fn read_mod_list(path: &PathBuf) -> Result<Vec<ModEntry>> {
 }
 
 fn download_curseforge(
-    client: &ureq::Agent,
+    download_client: &ureq::Agent,
     file: &PathBuf,
     output: &Path,
     temp_path: &Path,
@@ -91,7 +94,7 @@ fn download_curseforge(
     for mod_entry in mods {
         pb.set_message(format!("downloading {}", mod_entry.slug));
         if let Err(err) = download_mod_jar_lang(
-            client,
+            download_client,
             "curseforge",
             &mod_entry.slug,
             &mod_entry.version_id,
@@ -122,7 +125,8 @@ fn download_curseforge(
 }
 
 fn download_modrinth(
-    client: &ureq::Agent,
+    api_client: &ureq::Agent,
+    download_client: &ureq::Agent,
     file: &PathBuf,
     output: &Path,
     temp_path: &Path,
@@ -130,7 +134,7 @@ fn download_modrinth(
     let mods = read_mod_list(file)?;
     let mut versions = HashMap::new();
     let version_ids: Vec<String> = mods.iter().map(|item| item.version_id.clone()).collect();
-    if let Err(err) = fetch_modrinth_versions(client, &version_ids, &mut versions) {
+    if let Err(err) = fetch_modrinth_versions(api_client, &version_ids, &mut versions) {
         eprintln!("warning: failed to fetch Modrinth version metadata: {err:#}");
     }
 
@@ -159,7 +163,7 @@ fn download_modrinth(
         };
 
         if let Err(err) = download_mod_jar_lang(
-            client,
+            download_client,
             "modrinth",
             &mod_entry.slug,
             &mod_entry.version_id,
@@ -300,8 +304,13 @@ fn download_mod_jar_lang(
     Ok(())
 }
 
-fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> Result<()> {
-    let manifest: serde_json::Value = client
+fn download_minecraft(
+    api_client: &ureq::Agent,
+    download_client: &ureq::Agent,
+    output: &Path,
+    temp_path: &Path,
+) -> Result<()> {
+    let manifest: serde_json::Value = api_client
         .get("https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
         .call()
         .context("failed Minecraft manifest fetch")?
@@ -324,7 +333,7 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
         })
         .context("Minecraft manifest missing latest release metadata URL")?;
 
-    let version: serde_json::Value = client
+    let version: serde_json::Value = api_client
         .get(version_url)
         .call()
         .context("failed Minecraft version metadata fetch")?
@@ -348,7 +357,8 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
         .join("minecraft")
         .join(format!("client-{}.jar", sanitize_path_part(latest_release)));
     if !client_jar.exists() {
-        download_to_file(client, client_url, &client_jar).context("failed Minecraft client jar download")?;
+        download_to_file(download_client, client_url, &client_jar)
+            .context("failed Minecraft client jar download")?;
     }
     extract_minecraft_en_us(&client_jar, &minecraft_output.join("en_us.json"))?;
 
@@ -357,7 +367,7 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
         .and_then(|v| v.get("url"))
         .and_then(|v| v.as_str())
         .context("Minecraft version metadata missing assetIndex.url")?;
-    let asset_index: serde_json::Value = client
+    let asset_index: serde_json::Value = api_client
         .get(asset_index_url)
         .call()
         .context("failed Minecraft asset index fetch")?
@@ -400,7 +410,8 @@ fn download_minecraft(client: &ureq::Agent, output: &Path, temp_path: &Path) -> 
             &hash[..2],
             hash
         );
-        if let Err(err) = download_to_file(client, &url, &minecraft_output.join(filename)) {
+        if let Err(err) = download_to_file(download_client, &url, &minecraft_output.join(filename))
+        {
             eprintln!("warning: failed to download Minecraft asset {key}: {err:#}");
             failures.push(key.to_string());
         }
