@@ -1,9 +1,12 @@
 use std::fs;
 use std::fs::File;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
+
+/// Maximum bytes allowed when downloading a remote file (mod jars, assets, etc.).
+pub const MAX_DOWNLOAD_BYTES: usize = 500 * 1024 * 1024;
 
 /// Returns the platform-specific user data directory.
 pub fn data_dir() -> Result<PathBuf> {
@@ -62,11 +65,19 @@ pub fn download_to_file(client: &ureq::Agent, url: &str, path: &Path) -> Result<
             .get(url)
             .call()
             .with_context(|| format!("failed to download {url}"))?;
-        let mut reader = response.into_reader();
+        let mut reader = response
+            .into_reader()
+            .take((MAX_DOWNLOAD_BYTES as u64) + 1);
         let mut file = File::create(&temp_path)
             .with_context(|| format!("failed to create {}", temp_path.display()))?;
-        io::copy(&mut reader, &mut file)
+        let copied = io::copy(&mut reader, &mut file)
             .with_context(|| format!("failed to write {}", temp_path.display()))?;
+        if copied > MAX_DOWNLOAD_BYTES as u64 {
+            bail!(
+                "download from {url} exceeded the max size of {} bytes",
+                MAX_DOWNLOAD_BYTES,
+            );
+        }
         fs::rename(&temp_path, path).with_context(|| {
             format!(
                 "failed to move {} to {}",
