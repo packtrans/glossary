@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Smaller release binaries (supported on MSVC/gnu/darwin).
+  RUSTFLAGS: -C strip=symbols
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binaries
+        run: cargo build --release --bins
+
+      - name: Package Unix (${{ matrix.target }})
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p pack
+          cp target/release/packtrans-glossary pack/
+          cp target/release/packtrans-glossary-builder pack/
+          tar -C pack -czf "packtrans-glossary-${TAG}-${{ matrix.target }}.tar.gz" .
+
+      - name: Package Windows (${{ matrix.target }})
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force pack | Out-Null
+          Copy-Item "target/release/packtrans-glossary.exe" pack/
+          Copy-Item "target/release/packtrans-glossary-builder.exe" pack/
+          $zip = "packtrans-glossary-${env:TAG}-${{ matrix.target }}.zip"
+          Compress-Archive -Path "pack/*" -DestinationPath $zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: |
+            packtrans-glossary-${{ github.ref_name }}-${{ matrix.target }}.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: Write release notes from commits
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          PREV="$(git tag -l --sort=-v:refname | grep -Fxv "${TAG}" | head -1 || true)"
+          {
+            echo "## Changes"
+            echo
+            if [[ -n "${PREV}" ]]; then
+              git log --no-merges --pretty=format:'- %s' "${PREV}..${TAG}"
+            else
+              git log --no-merges --pretty=format:'- %s' "${TAG}"
+            fi
+          } > release_notes.md
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: artifacts/*
+          body_path: release_notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
