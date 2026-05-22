@@ -1,8 +1,6 @@
 # AGENTS.md
 
-## Cursor Cloud specific instructions
-
-### Project overview
+## Project overview
 
 Rust CLI workspace for indexing/querying Minecraft mod translation glossaries. Three crates under `crates/`:
 
@@ -10,11 +8,11 @@ Rust CLI workspace for indexing/querying Minecraft mod translation glossaries. T
 - `packtrans-glossary` — query CLI with dictionary management subcommands
 - `packtrans-glossary-builder` — builder CLI with subcommands: `index`, `create-mod-list`, `download`
 
-### Toolchain requirement
+## Toolchain requirement
 
 Requires Rust **1.85+** (Edition 2024, resolver "3"). The update script runs `rustup update stable` and `rustup default stable` to ensure this.
 
-### Build / Lint / Test
+## Build / Lint / Test
 
 Standard Cargo commands from workspace root:
 
@@ -25,7 +23,7 @@ cargo clippy         # Lint
 cargo fmt -- --check # Format check
 ```
 
-### Running the CLIs
+## Running the CLIs
 
 The builder has three subcommands: `index` (build search index from language files), `create-mod-list` (fetch mod lists from APIs), and `download` (download mod jar language files from Modrinth/CurseForge/Minecraft).
 
@@ -49,7 +47,7 @@ cargo run --bin packtrans-glossary -- dict download
 cargo run --bin packtrans-glossary -- dict ls
 ```
 
-### Notes
+## Notes
 
 - No external services, databases, or Docker required. This is a pure offline CLI.
 - The `indexes/` and `res/` directories are git-ignored.
