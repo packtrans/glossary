@@ -72,6 +72,9 @@ fn fetch_modrinth_mod_list(output: &PathBuf, count: usize) -> Result<()> {
     pb.finish_with_message("done");
 
     let count = mods.len();
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent)?;
+    }
     fs::write(
         output,
         serde_json::to_string_pretty(&serde_json::Value::Array(mods))?,
@@ -170,6 +173,9 @@ fn fetch_curseforge_mod_list(output: &PathBuf, count: usize) -> Result<()> {
     pb.finish_with_message("done");
 
     let count = mods.len();
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent)?;
+    }
     fs::write(
         output,
         serde_json::to_string_pretty(&serde_json::Value::Array(mods))?,

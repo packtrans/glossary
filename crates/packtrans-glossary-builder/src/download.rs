@@ -134,9 +134,7 @@ fn download_modrinth(
     let mods = read_mod_list(file)?;
     let mut versions = HashMap::new();
     let version_ids: Vec<String> = mods.iter().map(|item| item.version_id.clone()).collect();
-    if let Err(err) = fetch_modrinth_versions(api_client, &version_ids, &mut versions) {
-        eprintln!("warning: failed to fetch Modrinth version metadata: {err:#}");
-    }
+    fetch_modrinth_versions(api_client, &version_ids, &mut versions);
 
     let pb = progress_bar(mods.len() as u64, "downloading Modrinth mods");
     let mut failures = Vec::new();
@@ -197,13 +195,12 @@ fn fetch_modrinth_versions(
     client: &ureq::Agent,
     ids: &[String],
     versions: &mut HashMap<String, serde_json::Value>,
-) -> Result<()> {
+) {
     for chunk in ids.chunks(MODRINTH_VERSION_CHUNK_SIZE) {
         if let Err(err) = fetch_modrinth_versions_chunk(client, chunk, versions) {
             eprintln!("warning: {err:#}");
         }
     }
-    Ok(())
 }
 
 fn fetch_modrinth_versions_chunk(
@@ -290,9 +287,12 @@ fn download_mod_jar_lang(
         download_to_file(client, url, &jar_path).context("failed jar download")?;
     }
     extract_zip_file(&jar_path, &extracted_dir)?;
-    let lang_dir = find_best_lang_dir(&extracted_dir).context("missing lang folder")?;
-    copy_dir_contents(&lang_dir, &output_dir)?;
-    // Keep jar_path as a download cache; drop the larger extracted tree after copying.
+    let copy_result = (|| -> Result<()> {
+        let lang_dir = find_best_lang_dir(&extracted_dir).context("missing lang folder")?;
+        copy_dir_contents(&lang_dir, &output_dir)?;
+        Ok(())
+    })();
+    // Keep jar_path as a download cache; drop the larger extracted tree on success or failure.
     if extracted_dir.exists() {
         fs::remove_dir_all(&extracted_dir).with_context(|| {
             format!(
@@ -301,7 +301,7 @@ fn download_mod_jar_lang(
             )
         })?;
     }
-    Ok(())
+    copy_result
 }
 
 fn download_minecraft(
