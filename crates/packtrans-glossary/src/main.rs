@@ -66,16 +66,14 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Query(cmd) => {
-            query_index(QueryOptions {
-                query: cmd.query,
-                index_path: cli.index_path,
-                lang: cmd.lang,
-                limit: cmd.limit,
-                inverse: cmd.inverse,
-                dict_path: cli.dict_path,
-            })
-        }
+        Commands::Query(cmd) => query_index(QueryOptions {
+            query: cmd.query,
+            index_path: cli.index_path,
+            lang: cmd.lang,
+            limit: cmd.limit,
+            inverse: cmd.inverse,
+            dict_path: cli.dict_path,
+        }),
         Commands::Dict { command } => {
             let base = cli.dict_path.as_deref();
             match command {

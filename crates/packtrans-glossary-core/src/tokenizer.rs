@@ -24,7 +24,11 @@ pub(crate) fn target_tokenizer_name(target_language: &str) -> &'static str {
 }
 
 /// Registers the appropriate tokenizer for `target_language` into the given index.
-pub(crate) fn register_for_language(index: &Index, target_language: &str, base: Option<&Path>) -> Result<()> {
+pub(crate) fn register_for_language(
+    index: &Index,
+    target_language: &str,
+    base: Option<&Path>,
+) -> Result<()> {
     let name = target_tokenizer_name(target_language);
     register_by_name(index, name, base)
 }
@@ -40,10 +44,8 @@ fn register_by_name(index: &Index, name: &str, base: Option<&Path>) -> Result<()
     let dict_path = dictionary::ensure_dictionary(name, base)?;
     let dict = lindera::dictionary::load_fs_dictionary(&dict_path)
         .with_context(|| format!("failed to load {} dictionary", name))?;
-    let segmenter =
-        lindera::segmenter::Segmenter::new(lindera::mode::Mode::Normal, dict, None);
-    let tokenizer =
-        lindera_tantivy::tokenizer::LinderaTokenizer::from_segmenter(segmenter);
+    let segmenter = lindera::segmenter::Segmenter::new(lindera::mode::Mode::Normal, dict, None);
+    let tokenizer = lindera_tantivy::tokenizer::LinderaTokenizer::from_segmenter(segmenter);
     index.tokenizers().register(name, tokenizer);
     Ok(())
 }

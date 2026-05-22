@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tantivy::schema::{Field, IndexRecordOption, Schema, STORED, TextOptions, TEXT};
+use tantivy::schema::{Field, IndexRecordOption, STORED, Schema, TEXT, TextOptions};
 
 use crate::tokenizer;
 

@@ -9,9 +9,7 @@ use crate::util;
 
 /// Returns the root directory where search indexes are stored.
 pub fn indexes_root() -> Result<PathBuf> {
-    Ok(util::data_dir()?
-        .join("packtrans-glossary")
-        .join("indexes"))
+    Ok(util::data_dir()?.join("packtrans-glossary").join("indexes"))
 }
 
 /// Validates that `lang` is a non-empty string without path traversal characters.

@@ -3,7 +3,7 @@ mod index;
 mod query;
 mod schema;
 mod tokenizer;
-mod util;
+pub mod util;
 
 pub use index::{IndexOptions, build_index, indexes_root};
 pub use query::{QueryOptions, query_index};
