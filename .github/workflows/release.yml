@@ -5,9 +5,6 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: write
-
 env:
   CARGO_TERM_COLOR: always
   # Smaller release binaries (supported on MSVC/gnu/darwin).
@@ -15,6 +12,9 @@ env:
 
 jobs:
   build:
+    permissions:
+      contents: read
+
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +30,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -43,10 +45,11 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          mkdir -p pack
-          cp target/release/packtrans-glossary pack/
-          cp target/release/packtrans-glossary-builder pack/
-          tar -C pack -czf "packtrans-glossary-${TAG}-${{ matrix.target }}.tar.gz" .
+          ARCHIVE_DIR="packtrans-glossary-${TAG}-${{ matrix.target }}"
+          mkdir -p "${ARCHIVE_DIR}"
+          cp target/release/packtrans-glossary "${ARCHIVE_DIR}/"
+          cp target/release/packtrans-glossary-builder "${ARCHIVE_DIR}/"
+          tar -czf "${ARCHIVE_DIR}.tar.gz" "${ARCHIVE_DIR}"
 
       - name: Package Windows (${{ matrix.target }})
         if: runner.os == 'Windows'
@@ -55,11 +58,11 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           $ErrorActionPreference = "Stop"
-          New-Item -ItemType Directory -Force pack | Out-Null
-          Copy-Item "target/release/packtrans-glossary.exe" pack/
-          Copy-Item "target/release/packtrans-glossary-builder.exe" pack/
-          $zip = "packtrans-glossary-${env:TAG}-${{ matrix.target }}.zip"
-          Compress-Archive -Path "pack/*" -DestinationPath $zip -Force
+          $archiveDir = "packtrans-glossary-${env:TAG}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force $archiveDir | Out-Null
+          Copy-Item "target/release/packtrans-glossary.exe" $archiveDir/
+          Copy-Item "target/release/packtrans-glossary-builder.exe" $archiveDir/
+          Compress-Archive -Path $archiveDir -DestinationPath "${archiveDir}.zip" -Force
 
       - uses: actions/upload-artifact@v4
         with:
@@ -70,10 +73,14 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/download-artifact@v4
         with:
@@ -86,7 +93,13 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          PREV="$(git tag -l --sort=-v:refname | grep -Fxv "${TAG}" | head -1 || true)"
+          # Prefer the latest ancestor tag (handles backports vs only global version sort).
+          PREV="$(
+            git tag -l --sort=-v:refname --merged="${TAG}^{}" |
+              grep -Fxv "${TAG}" |
+              head -1 ||
+              true
+          )"
           {
             echo "## Changes"
             echo
