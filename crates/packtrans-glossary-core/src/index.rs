@@ -152,13 +152,11 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
 
 /// Loads a JSON language file into a key-value map.
 fn load_language_file(path: &PathBuf) -> Result<HashMap<String, String>> {
-    let mut bytes = fs::read(path)
+    let bytes = fs::read(path)
         .with_context(|| format!("failed to read language file: {}", path.display()))?;
     const UTF8_BOM: [u8; 3] = [0xEF, 0xBB, 0xBF];
-    if bytes.starts_with(&UTF8_BOM) {
-        bytes.drain(..3);
-    }
-    serde_json::from_slice(&bytes)
+    let json = bytes.strip_prefix(&UTF8_BOM).unwrap_or(&bytes);
+    serde_json::from_slice(json)
         .with_context(|| format!("failed to parse language file: {}", path.display()))
 }
 
