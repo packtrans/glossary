@@ -95,8 +95,8 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
 
     let mut writer = index.writer(50_000_000)?;
 
-    let mut indexed_mods = 0usize;
-    let mut indexed_docs = 0usize;
+    let mut total_mods = 0usize;
+    let mut lang_file_mods = 0usize;
 
     for entry in fs::read_dir(&options.scan_dir)
         .with_context(|| format!("failed to read scan dir: {}", options.scan_dir.display()))?
@@ -107,22 +107,18 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
             continue;
         }
 
+        total_mods += 1;
         let mod_id = entry.file_name().to_string_lossy().into_owned();
         let source_path = mod_dir.join("en_us.json");
         let target_path = mod_dir.join(format!("{}.json", options.lang));
 
         if !source_path.is_file() || !target_path.is_file() {
-            eprintln!(
-                "warning: skipping {mod_id}: missing {} or {}",
-                source_path.display(),
-                target_path.display()
-            );
             continue;
         }
 
-        let source_entries = load_language_file(&source_path)?;
-        let target_entries = load_language_file(&target_path)?;
-        let mut mod_docs = 0usize;
+        lang_file_mods += 1;
+        let source_entries = load_language_file(&source_path);
+        let target_entries = load_language_file(&target_path);
 
         for (key, source_text) in source_entries {
             let Some(target_text) = target_entries.get(&key) else {
@@ -137,17 +133,11 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
             doc.add_text(fields.target_lang, &options.lang);
             doc.add_text(fields.target_text, target_text);
             writer.add_document(doc)?;
-            indexed_docs += 1;
-            mod_docs += 1;
-        }
-
-        if mod_docs > 0 {
-            indexed_mods += 1;
         }
     }
 
     writer.commit()?;
-    println!("indexed {indexed_docs} documents from {indexed_mods} mods");
+    println!("total mods: {total_mods}, lang files: {lang_file_mods}");
 
     Ok(())
 }
@@ -155,36 +145,41 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
 /// Loads a JSON language file into a key-value map.
 ///
 /// Values may be plain strings or Minecraft JSON text components (arrays/objects).
-fn load_language_file(path: &PathBuf) -> Result<HashMap<String, String>> {
-    let bytes = fs::read(path)
-        .with_context(|| format!("failed to read language file: {}", path.display()))?;
+/// Malformed JSON is ignored after printing a warning; an empty map is returned.
+fn load_language_file(path: &PathBuf) -> HashMap<String, String> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!(
+                "warning: failed to read language file {}: {err}",
+                path.display()
+            );
+            return HashMap::new();
+        }
+    };
     const UTF8_BOM: [u8; 3] = [0xEF, 0xBB, 0xBF];
     let json = bytes.strip_prefix(&UTF8_BOM).unwrap_or(&bytes);
-    let raw: HashMap<String, Value> = serde_json::from_slice(json)
-        .with_context(|| format!("failed to parse language file: {}", path.display()))?;
+    let raw: HashMap<String, Value> = match serde_json::from_slice(json) {
+        Ok(raw) => raw,
+        Err(err) => {
+            eprintln!(
+                "warning: failed to parse language file {}: {err}",
+                path.display()
+            );
+            return HashMap::new();
+        }
+    };
 
     let mut entries = HashMap::new();
-    let mut skipped = 0usize;
     for (key, value) in &raw {
         match text_component::flatten_language_value(value, &raw) {
             Some(text) if !text.is_empty() => {
                 entries.insert(key.clone(), text);
             }
-            Some(_) => {}
-            None => {
-                skipped += 1;
-                eprintln!(
-                    "warning: skipping {}: unsupported value type in {}",
-                    key,
-                    path.display()
-                );
-            }
+            Some(_) | None => {}
         }
     }
-    if skipped > 0 {
-        eprintln!("warning: skipped {skipped} entries in {}", path.display());
-    }
-    Ok(entries)
+    entries
 }
 
 #[cfg(test)]
@@ -204,7 +199,7 @@ mod tests {
         content.extend_from_slice(r#"{"item.example":"value"}"#.as_bytes());
         fs::write(&path, content).unwrap();
 
-        let map = load_language_file(&path).unwrap();
+        let map = load_language_file(&path);
         assert_eq!(map.get("item.example"), Some(&"value".to_string()));
 
         let _ = fs::remove_dir_all(&dir);
@@ -231,7 +226,7 @@ mod tests {
         )
         .unwrap();
 
-        let map = load_language_file(&path).unwrap();
+        let map = load_language_file(&path);
         assert_eq!(map.get("item.plain"), Some(&"Hello".to_string()));
         assert_eq!(
             map.get("item.things.ender_pouch.tooltip"),
