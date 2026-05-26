@@ -202,7 +202,7 @@ fn flatten_language_value(value: &Value) -> Option<String> {
                 return Some(key.clone());
             }
             if obj.contains_key("index") {
-                return Some(String::new());
+                return Some("{}".to_string());
             }
             None
         }
@@ -258,7 +258,7 @@ mod tests {
         assert_eq!(map.get("item.plain"), Some(&"Hello".to_string()));
         assert_eq!(
             map.get("item.things.ender_pouch.tooltip"),
-            Some(&"Press  to open ender Chest inventory".to_string())
+            Some(&"Press {} to open ender Chest inventory".to_string())
         );
 
         let _ = fs::remove_dir_all(&dir);
