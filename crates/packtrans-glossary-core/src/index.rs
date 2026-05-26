@@ -152,8 +152,34 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
 
 /// Loads a JSON language file into a key-value map.
 fn load_language_file(path: &PathBuf) -> Result<HashMap<String, String>> {
-    let file = fs::File::open(path)
-        .with_context(|| format!("failed to open language file: {}", path.display()))?;
-    serde_json::from_reader(file)
+    let bytes = fs::read(path)
+        .with_context(|| format!("failed to read language file: {}", path.display()))?;
+    const UTF8_BOM: [u8; 3] = [0xEF, 0xBB, 0xBF];
+    let json = bytes.strip_prefix(&UTF8_BOM).unwrap_or(&bytes);
+    serde_json::from_slice(json)
         .with_context(|| format!("failed to parse language file: {}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_language_file_strips_utf8_bom() {
+        let dir = std::env::temp_dir().join(format!(
+            "packtrans-glossary-bom-test-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("zh_cn.json");
+        const UTF8_BOM: [u8; 3] = [0xEF, 0xBB, 0xBF];
+        let mut content = Vec::from(UTF8_BOM);
+        content.extend_from_slice(r#"{"item.example":"value"}"#.as_bytes());
+        fs::write(&path, content).unwrap();
+
+        let map = load_language_file(&path).unwrap();
+        assert_eq!(map.get("item.example"), Some(&"value".to_string()));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
