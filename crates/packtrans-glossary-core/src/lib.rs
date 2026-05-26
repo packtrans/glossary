@@ -2,6 +2,7 @@ pub mod dictionary;
 mod index;
 mod query;
 mod schema;
+mod text_component;
 mod tokenizer;
 pub mod util;
 

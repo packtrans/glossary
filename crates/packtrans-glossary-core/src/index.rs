@@ -1,9 +1,11 @@
 use std::{collections::HashMap, fs, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
+use serde_json::Value;
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
 use crate::schema::build_schema;
+use crate::text_component;
 use crate::tokenizer;
 use crate::util;
 
@@ -151,13 +153,38 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
 }
 
 /// Loads a JSON language file into a key-value map.
+///
+/// Values may be plain strings or Minecraft JSON text components (arrays/objects).
 fn load_language_file(path: &PathBuf) -> Result<HashMap<String, String>> {
     let bytes = fs::read(path)
         .with_context(|| format!("failed to read language file: {}", path.display()))?;
     const UTF8_BOM: [u8; 3] = [0xEF, 0xBB, 0xBF];
     let json = bytes.strip_prefix(&UTF8_BOM).unwrap_or(&bytes);
-    serde_json::from_slice(json)
-        .with_context(|| format!("failed to parse language file: {}", path.display()))
+    let raw: HashMap<String, Value> = serde_json::from_slice(json)
+        .with_context(|| format!("failed to parse language file: {}", path.display()))?;
+
+    let mut entries = HashMap::new();
+    let mut skipped = 0usize;
+    for (key, value) in &raw {
+        match text_component::flatten_language_value(value, &raw) {
+            Some(text) if !text.is_empty() => {
+                entries.insert(key.clone(), text);
+            }
+            Some(_) => {}
+            None => {
+                skipped += 1;
+                eprintln!(
+                    "warning: skipping {}: unsupported value type in {}",
+                    key,
+                    path.display()
+                );
+            }
+        }
+    }
+    if skipped > 0 {
+        eprintln!("warning: skipped {skipped} entries in {}", path.display());
+    }
+    Ok(entries)
 }
 
 #[cfg(test)]
@@ -179,6 +206,37 @@ mod tests {
 
         let map = load_language_file(&path).unwrap();
         assert_eq!(map.get("item.example"), Some(&"value".to_string()));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_language_file_flattens_minecraft_text_components() {
+        let dir = std::env::temp_dir().join(format!(
+            "packtrans-glossary-text-test-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("en_us.json");
+        fs::write(
+            &path,
+            r#"{
+  "item.plain": "Hello",
+  "item.things.ender_pouch.tooltip": [
+    {"text": "Press ", "color": "gray"},
+    {"index": 0, "color": "white"},
+    " to open ender Chest inventory"
+  ]
+}"#,
+        )
+        .unwrap();
+
+        let map = load_language_file(&path).unwrap();
+        assert_eq!(map.get("item.plain"), Some(&"Hello".to_string()));
+        assert_eq!(
+            map.get("item.things.ender_pouch.tooltip"),
+            Some(&"Press {} to open ender Chest inventory".to_string())
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
