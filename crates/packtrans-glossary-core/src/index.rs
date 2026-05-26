@@ -5,6 +5,7 @@ use serde_json::Value;
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
 use crate::schema::build_schema;
+use crate::text_component;
 use crate::tokenizer;
 use crate::util;
 
@@ -164,10 +165,10 @@ fn load_language_file(path: &PathBuf) -> Result<HashMap<String, String>> {
 
     let mut entries = HashMap::new();
     let mut skipped = 0usize;
-    for (key, value) in raw {
-        match flatten_language_value(&value) {
+    for (key, value) in &raw {
+        match text_component::flatten_language_value(value, &raw) {
             Some(text) if !text.is_empty() => {
-                entries.insert(key, text);
+                entries.insert(key.clone(), text);
             }
             Some(_) => {}
             None => {
@@ -184,30 +185,6 @@ fn load_language_file(path: &PathBuf) -> Result<HashMap<String, String>> {
         eprintln!("warning: skipped {skipped} entries in {}", path.display());
     }
     Ok(entries)
-}
-
-/// Converts a language-file value (string or Minecraft text component) to plain text.
-fn flatten_language_value(value: &Value) -> Option<String> {
-    match value {
-        Value::String(text) => Some(text.clone()),
-        Value::Array(parts) => {
-            let text: String = parts.iter().filter_map(flatten_language_value).collect();
-            Some(text)
-        }
-        Value::Object(obj) => {
-            if let Some(Value::String(text)) = obj.get("text") {
-                return Some(text.clone());
-            }
-            if let Some(Value::String(key)) = obj.get("translate") {
-                return Some(key.clone());
-            }
-            if obj.contains_key("index") {
-                return Some("{}".to_string());
-            }
-            None
-        }
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -262,11 +239,5 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn flatten_language_value_handles_translate() {
-        let value: Value = serde_json::from_str(r#"{"translate":"gui.done"}"#).unwrap();
-        assert_eq!(flatten_language_value(&value).as_deref(), Some("gui.done"));
     }
 }
