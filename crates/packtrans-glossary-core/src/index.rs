@@ -97,6 +97,8 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
 
     let mut total_mods = 0usize;
     let mut lang_file_mods = 0usize;
+    let mut indexed_mods = 0usize;
+    let mut indexed_docs = 0usize;
 
     for entry in fs::read_dir(&options.scan_dir)
         .with_context(|| format!("failed to read scan dir: {}", options.scan_dir.display()))?
@@ -119,6 +121,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
         lang_file_mods += 1;
         let source_entries = load_language_file(&source_path);
         let target_entries = load_language_file(&target_path);
+        let mut mod_docs = 0usize;
 
         for (key, source_text) in source_entries {
             let Some(target_text) = target_entries.get(&key) else {
@@ -133,11 +136,19 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
             doc.add_text(fields.target_lang, &options.lang);
             doc.add_text(fields.target_text, target_text);
             writer.add_document(doc)?;
+            indexed_docs += 1;
+            mod_docs += 1;
+        }
+
+        if mod_docs > 0 {
+            indexed_mods += 1;
         }
     }
 
     writer.commit()?;
-    println!("total mods: {total_mods}, lang files: {lang_file_mods}");
+    println!(
+        "total mods: {total_mods}, lang files: {lang_file_mods}, indexed {indexed_docs} documents from {indexed_mods} mods"
+    );
 
     Ok(())
 }
