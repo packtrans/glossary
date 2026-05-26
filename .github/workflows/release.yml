@@ -77,44 +77,16 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           pattern: dist-*
           merge-multiple: true
 
-      - name: Write release notes from commits
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          # Prefer the latest ancestor tag (handles backports vs only global version sort).
-          PREV="$(
-            git tag -l --sort=-v:refname --merged="${TAG}^{}" |
-              grep -Fxv "${TAG}" |
-              head -1 ||
-              true
-          )"
-          {
-            echo "## Changes"
-            echo
-            if [[ -n "${PREV}" ]]; then
-              git log --no-merges --pretty=format:'- %s' "${PREV}..${TAG}"
-            else
-              git log --no-merges --pretty=format:'- %s' "${TAG}"
-            fi
-          } > release_notes.md
-
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           files: artifacts/*
-          body_path: release_notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
