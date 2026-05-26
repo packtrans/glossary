@@ -63,7 +63,8 @@ packtrans-glossary-builder --index-path indexes index \
 - `--dict-path` optionally overrides the dictionary storage location.
 - Source language is always `en_us`.
 - Scans all direct child directories under `--scan-dir`; each is treated as one mod.
-- Skips mods with missing source or target language files (prints a warning).
+- Skips mods with missing source or target language files (no error; summary reports total mods and mods with both language files).
+- Malformed language JSON is skipped with a warning; indexing still completes successfully.
 - Fails if the index already exists.
 
 ### Downloading Mod Language Files
