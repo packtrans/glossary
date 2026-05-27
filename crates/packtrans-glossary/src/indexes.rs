@@ -427,6 +427,9 @@ fn install_asset(
     })();
 
     let _ = fs::remove_dir_all(&work_dir);
+    if install_result.is_err() && temp_index_dir.exists() {
+        let _ = fs::remove_dir_all(&temp_index_dir);
+    }
     install_result
 }
 
