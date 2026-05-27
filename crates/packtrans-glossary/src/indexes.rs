@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
-use packtrans_glossary_core::{indexes_root, util, validate_lang};
+use packtrans_glossary_core::{indexes_root, util};
 use serde_json::json;
 
 use crate::progress;
@@ -93,7 +93,7 @@ pub fn run(command: IndexCommand, base: Option<&Path>) -> Result<()> {
 }
 
 pub fn resolve_query_index_dir(lang: &str, base: Option<&Path>) -> Result<PathBuf> {
-    validate_lang(lang)?;
+    util::validate_path_segment(lang, "lang")?;
     let root = indexes_root_or(base)?;
     let local_index_dir = root.join(lang);
     if local_index_dir.is_dir() {
@@ -165,7 +165,7 @@ fn list(base: Option<&Path>) -> Result<()> {
 }
 
 fn delete(cmd: IndexDeleteCommand, base: Option<&Path>) -> Result<()> {
-    validate_lang(&cmd.lang)?;
+    util::validate_path_segment(&cmd.lang, "lang")?;
     let version = match cmd.version {
         Some(version) => version,
         None => latest_installed_for_lang(&cmd.lang, base)?
@@ -246,7 +246,7 @@ fn fetch_latest_release() -> Result<Release> {
 }
 
 fn ensure_release_index(lang: &str, base: Option<&Path>, release: &Release) -> Result<IndexEntry> {
-    validate_lang(lang)?;
+    util::validate_path_segment(lang, "lang")?;
     let asset = select_asset(release, lang)?;
     let index_dir = downloaded_index_dir(base, &release.tag_name, lang)?;
     if index_dir.is_dir() {
@@ -409,14 +409,14 @@ pub fn list_downloaded_indexes(base: Option<&Path>) -> Result<Vec<IndexEntry>> {
 }
 
 fn latest_installed_for_lang(lang: &str, base: Option<&Path>) -> Result<Option<IndexEntry>> {
-    validate_lang(lang)?;
+    util::validate_path_segment(lang, "lang")?;
     Ok(list_downloaded_indexes(base)?
         .into_iter()
         .rfind(|entry| entry.lang == lang))
 }
 
 fn delete_downloaded_index(lang: &str, version: &str, base: Option<&Path>) -> Result<()> {
-    validate_lang(lang)?;
+    util::validate_path_segment(lang, "lang")?;
     util::validate_path_segment(version, "release tag")?;
     let version_dir = downloaded_indexes_root(base)?.join(version);
     let index_dir = version_dir.join(lang);
@@ -458,7 +458,7 @@ fn clean_old_versions_keep(base: Option<&Path>, keep_version: &str) -> Result<Ve
 }
 
 fn select_asset<'a>(release: &'a Release, lang: &str) -> Result<&'a ReleaseAsset> {
-    validate_lang(lang)?;
+    util::validate_path_segment(lang, "lang")?;
     let prefix = format!("packtrans-glossary-index-{lang}-");
     release
         .assets
@@ -504,7 +504,7 @@ fn downloaded_indexes_root(base: Option<&Path>) -> Result<PathBuf> {
 
 fn downloaded_index_dir(base: Option<&Path>, version: &str, lang: &str) -> Result<PathBuf> {
     util::validate_path_segment(version, "release tag")?;
-    validate_lang(lang)?;
+    util::validate_path_segment(lang, "lang")?;
     Ok(downloaded_indexes_root(base)?.join(version).join(lang))
 }
 

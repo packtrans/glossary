@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use packtrans_glossary_core::dictionary;
 use packtrans_glossary_core::schema::fields_from_schema;
-use packtrans_glossary_core::{tokenizer, validate_lang};
+use packtrans_glossary_core::{tokenizer, util};
 use tantivy::{
     Index, TantivyDocument,
     collector::TopDocs,
@@ -35,7 +35,7 @@ pub struct QueryOptions {
 
 /// Queries a Tantivy index and prints matching documents.
 pub fn query_index(options: QueryOptions) -> Result<()> {
-    validate_lang(&options.lang)?;
+    util::validate_path_segment(&options.lang, "lang")?;
     let index_dir = indexes::resolve_query_index_dir(&options.lang, options.index_path.as_deref())?;
     let dir = MmapDirectory::open(&index_dir)
         .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;

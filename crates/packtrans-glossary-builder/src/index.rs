@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 use packtrans_glossary_core::schema::build_schema;
-use packtrans_glossary_core::{indexes_root, text_component, tokenizer, validate_lang};
+use packtrans_glossary_core::{indexes_root, text_component, tokenizer, util};
 use serde_json::Value;
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
@@ -22,7 +22,7 @@ pub struct IndexOptions {
 ///
 /// Each mod folder is expected to contain `en_us.json` and `{lang}.json`.
 pub fn build_index(options: IndexOptions) -> Result<()> {
-    validate_lang(&options.lang)?;
+    util::validate_path_segment(&options.lang, "lang")?;
     let index_path = match options.index_path {
         Some(path) => path,
         None => indexes_root()?,
