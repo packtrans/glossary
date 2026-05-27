@@ -42,7 +42,11 @@ fn dictionaries_root_or(base: Option<&Path>) -> Result<PathBuf> {
     }
 }
 
-/// Returns the expected dictionary directory for a dictionary name and version.
+/// Returns the expected dictionary directory for a dictionary name under the
+/// current `lindera` version (`lindera::get_version()`).
+///
+/// Validates `name` via [`crate::util::validate_path_segment`] and builds
+/// `dictionaries_root_or(base)?.join(version).join(name)`.
 pub fn dictionary_path(name: &str, base: Option<&Path>) -> Result<PathBuf> {
     let version = lindera::get_version();
     crate::util::validate_path_segment(name, "dictionary name")?;

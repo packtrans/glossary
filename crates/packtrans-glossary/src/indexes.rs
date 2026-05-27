@@ -150,6 +150,7 @@ fn resolve_downloaded_index_dir(
     let checked_release = if force_version_check || should_check_latest_version(&meta, now) {
         let release = fetch_latest_release()?;
         meta.latest_version_check_time = Some(now);
+        meta.current_version = Some(release.tag_name.clone());
         write_downloaded_meta(&root, &meta)?;
         Some(release)
     } else {
@@ -243,7 +244,7 @@ fn delete(cmd: IndexDeleteCommand, base: Option<&Path>) -> Result<()> {
 fn clean(cmd: IndexCleanCommand, base: Option<&Path>) -> Result<()> {
     let keep_version = match cmd.keep_version {
         Some(version) => version,
-        None => fetch_latest_release()?.tag_name,
+        None => resolve_keep_version_for_clean(base)?,
     };
     let removed = clean_old_versions_keep(base, &keep_version)?;
     if removed.is_empty() {
@@ -556,6 +557,56 @@ fn select_asset<'a>(release: &'a Release, lang: &str) -> Result<&'a ReleaseAsset
 }
 
 fn available_languages(release: &Release) -> Vec<String> {
+    fetch_available_languages(&release.tag_name).unwrap_or_else(|_| {
+        available_languages_from_assets(release)
+    })
+}
+
+fn fetch_available_languages(tag: &str) -> Result<Vec<String>> {
+    util::validate_path_segment(tag, "release tag")?;
+    let url = format!(
+        "https://raw.githubusercontent.com/packtrans/glossary-indexes/refs/tags/{tag}/languages.json"
+    );
+    let response = http_client()
+        .get(&url)
+        .call()
+        .with_context(|| format!("failed to fetch available languages from {url}"))?;
+    let mut body = String::new();
+    response
+        .into_reader()
+        .take((MAX_RELEASE_BODY_BYTES + 1) as u64)
+        .read_to_string(&mut body)
+        .with_context(|| format!("failed to read available languages from {url}"))?;
+    if body.len() > MAX_RELEASE_BODY_BYTES {
+        bail!("available languages response exceeded {MAX_RELEASE_BODY_BYTES} bytes");
+    }
+
+    let value: serde_json::Value =
+        serde_json::from_str(&body).context("failed to parse available languages")?;
+    let langs = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .filter_map(|item| item.as_str().map(str::to_string))
+            .collect(),
+        serde_json::Value::Object(map) => map
+            .get("languages")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    if langs.is_empty() {
+        bail!("available languages response did not include any languages");
+    }
+    Ok(langs)
+}
+
+fn available_languages_from_assets(release: &Release) -> Vec<String> {
     let mut langs = release
         .assets
         .iter()
@@ -565,6 +616,25 @@ fn available_languages(release: &Release) -> Vec<String> {
     langs.sort();
     langs.dedup();
     langs
+}
+
+fn resolve_keep_version_for_clean(base: Option<&Path>) -> Result<String> {
+    let root = indexes_root_or(base)?;
+    if let Some(version) = read_downloaded_meta(&root)?.current_version {
+        return Ok(version);
+    }
+    if let Some(version) = latest_installed_version(base) {
+        return Ok(version);
+    }
+    Ok(fetch_latest_release()?.tag_name)
+}
+
+fn latest_installed_version(base: Option<&Path>) -> Option<String> {
+    list_downloaded_indexes(base)
+        .ok()?
+        .into_iter()
+        .map(|entry| entry.version)
+        .max()
 }
 
 fn indexes_root_or(base: Option<&Path>) -> Result<PathBuf> {
