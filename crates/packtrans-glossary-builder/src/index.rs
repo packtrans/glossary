@@ -2,7 +2,9 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 use packtrans_glossary_core::schema::build_schema;
-use packtrans_glossary_core::{indexes_root, text_component, tokenizer, util};
+use packtrans_glossary_core::{
+    indexes_root, local_index_dir, text_component, tokenizer, util,
+};
 use serde_json::Value;
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
@@ -34,7 +36,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
         );
     }
 
-    let index_dir = index_path.join(&options.lang);
+    let index_dir = local_index_dir(&index_path, &options.lang)?;
 
     if let Ok(metadata) = index_dir.metadata() {
         if !metadata.is_dir() {

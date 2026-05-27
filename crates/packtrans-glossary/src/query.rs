@@ -31,12 +31,18 @@ pub struct QueryOptions {
     pub inverse: bool,
     /// Custom base path for dictionary lookup.
     pub dict_path: Option<PathBuf>,
+    /// Prefer `local/{lang}` over a release-downloaded index.
+    pub prefer_local_index: bool,
 }
 
 /// Queries a Tantivy index and prints matching documents.
 pub fn query_index(options: QueryOptions) -> Result<()> {
     util::validate_path_segment(&options.lang, "lang")?;
-    let index_dir = indexes::resolve_query_index_dir(&options.lang, options.index_path.as_deref())?;
+    let index_dir = indexes::resolve_query_index_dir(
+        &options.lang,
+        options.index_path.as_deref(),
+        options.prefer_local_index,
+    )?;
     let dir = MmapDirectory::open(&index_dir)
         .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;
     let index = Index::open(dir)
