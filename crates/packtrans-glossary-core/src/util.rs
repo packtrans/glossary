@@ -53,6 +53,17 @@ pub fn sanitize_path_part(value: &str) -> String {
     }
 }
 
+/// Validates that `value` is a non-empty path segment without directory traversal.
+pub fn validate_path_segment(value: &str, kind: &str) -> Result<()> {
+    if value.is_empty() {
+        bail!("{kind} must not be empty");
+    }
+    if value.contains("..") || value.contains('/') || value.contains('\\') {
+        bail!("{kind} contains invalid path component: {value}");
+    }
+    Ok(())
+}
+
 /// Downloads a URL to a local file.
 pub fn download_to_file(client: &ureq::Agent, url: &str, path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
@@ -65,9 +76,7 @@ pub fn download_to_file(client: &ureq::Agent, url: &str, path: &Path) -> Result<
             .get(url)
             .call()
             .with_context(|| format!("failed to download {url}"))?;
-        let mut reader = response
-            .into_reader()
-            .take((MAX_DOWNLOAD_BYTES as u64) + 1);
+        let mut reader = response.into_reader().take((MAX_DOWNLOAD_BYTES as u64) + 1);
         let mut file = File::create(&temp_path)
             .with_context(|| format!("failed to create {}", temp_path.display()))?;
         let copied = io::copy(&mut reader, &mut file)
@@ -205,4 +214,66 @@ pub fn count_json_files(dir: &Path) -> Result<usize> {
         }
     }
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_path_segment_accepts_simple_lang() {
+        assert!(validate_path_segment("en_us", "lang").is_ok());
+    }
+
+    #[test]
+    fn validate_path_segment_accepts_value_with_hyphens() {
+        assert!(validate_path_segment("index-20260526", "release tag").is_ok());
+    }
+
+    #[test]
+    fn validate_path_segment_accepts_value_with_dots_in_middle() {
+        assert!(validate_path_segment("v1.2.3", "version").is_ok());
+    }
+
+    #[test]
+    fn validate_path_segment_rejects_empty_string() {
+        let err = validate_path_segment("", "lang").unwrap_err();
+        assert!(err.to_string().contains("lang must not be empty"));
+    }
+
+    #[test]
+    fn validate_path_segment_rejects_double_dot() {
+        let err = validate_path_segment("..", "lang").unwrap_err();
+        assert!(err.to_string().contains("invalid path component"));
+    }
+
+    #[test]
+    fn validate_path_segment_rejects_value_containing_double_dot() {
+        let err = validate_path_segment("foo..bar", "lang").unwrap_err();
+        assert!(err.to_string().contains("invalid path component"));
+    }
+
+    #[test]
+    fn validate_path_segment_rejects_forward_slash() {
+        let err = validate_path_segment("a/b", "lang").unwrap_err();
+        assert!(err.to_string().contains("invalid path component"));
+    }
+
+    #[test]
+    fn validate_path_segment_rejects_backslash() {
+        let err = validate_path_segment("a\\b", "lang").unwrap_err();
+        assert!(err.to_string().contains("invalid path component"));
+    }
+
+    #[test]
+    fn validate_path_segment_includes_kind_in_empty_error() {
+        let err = validate_path_segment("", "release tag").unwrap_err();
+        assert!(err.to_string().contains("release tag must not be empty"));
+    }
+
+    #[test]
+    fn validate_path_segment_includes_value_in_traversal_error() {
+        let err = validate_path_segment("bad/path", "lang").unwrap_err();
+        assert!(err.to_string().contains("bad/path"));
+    }
 }

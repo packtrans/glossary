@@ -11,7 +11,7 @@ use crate::dictionary;
 /// - `ja*` → [`dictionary::IPADIC`]
 /// - `ko*` → [`dictionary::KO_DIC`]
 /// - otherwise → `"default"`
-pub(crate) fn target_tokenizer_name(target_language: &str) -> &'static str {
+pub fn target_tokenizer_name(target_language: &str) -> &'static str {
     if target_language == "lzh" || target_language.starts_with("zh") {
         dictionary::JIEBA
     } else if target_language.starts_with("ja") {
@@ -23,8 +23,75 @@ pub(crate) fn target_tokenizer_name(target_language: &str) -> &'static str {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zh_cn_uses_jieba() {
+        assert_eq!(target_tokenizer_name("zh_cn"), dictionary::JIEBA);
+    }
+
+    #[test]
+    fn zh_tw_uses_jieba() {
+        assert_eq!(target_tokenizer_name("zh_tw"), dictionary::JIEBA);
+    }
+
+    #[test]
+    fn lzh_uses_jieba() {
+        assert_eq!(target_tokenizer_name("lzh"), dictionary::JIEBA);
+    }
+
+    #[test]
+    fn ja_jp_uses_ipadic() {
+        assert_eq!(target_tokenizer_name("ja_jp"), dictionary::IPADIC);
+    }
+
+    #[test]
+    fn ja_uses_ipadic() {
+        assert_eq!(target_tokenizer_name("ja"), dictionary::IPADIC);
+    }
+
+    #[test]
+    fn ko_kr_uses_ko_dic() {
+        assert_eq!(target_tokenizer_name("ko_kr"), dictionary::KO_DIC);
+    }
+
+    #[test]
+    fn ko_uses_ko_dic() {
+        assert_eq!(target_tokenizer_name("ko"), dictionary::KO_DIC);
+    }
+
+    #[test]
+    fn en_us_uses_default() {
+        assert_eq!(target_tokenizer_name("en_us"), "default");
+    }
+
+    #[test]
+    fn de_de_uses_default() {
+        assert_eq!(target_tokenizer_name("de_de"), "default");
+    }
+
+    #[test]
+    fn empty_string_uses_default() {
+        assert_eq!(target_tokenizer_name(""), "default");
+    }
+
+    #[test]
+    fn zh_prefix_variants_all_use_jieba() {
+        for lang in &["zh", "zh_cn", "zh_tw", "zh_hk"] {
+            assert_eq!(
+                target_tokenizer_name(lang),
+                dictionary::JIEBA,
+                "expected {} to use JIEBA",
+                lang
+            );
+        }
+    }
+}
+
 /// Registers the appropriate tokenizer for `target_language` into the given index.
-pub(crate) fn register_for_language(
+pub fn register_for_language(
     index: &Index,
     target_language: &str,
     base: Option<&Path>,

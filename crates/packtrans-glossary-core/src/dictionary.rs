@@ -42,15 +42,12 @@ fn dictionaries_root_or(base: Option<&Path>) -> Result<PathBuf> {
     }
 }
 
-/// Validates that `s` is a non-empty path segment without directory traversal.
-fn validate_segment(s: &str) -> Result<()> {
-    if s.is_empty() {
-        bail!("segment must not be empty");
-    }
-    if s.contains("..") || s.contains('/') || s.contains('\\') {
-        bail!("segment contains invalid path component: {}", s);
-    }
-    Ok(())
+/// Returns the expected dictionary directory for a dictionary name and version.
+pub fn dictionary_path(name: &str, base: Option<&Path>) -> Result<PathBuf> {
+    let version = lindera::get_version();
+    crate::util::validate_path_segment(name, "dictionary name")?;
+    crate::util::validate_path_segment(version, "dictionary version")?;
+    Ok(dictionaries_root_or(base)?.join(version).join(name))
 }
 
 /// Ensures a dictionary is available locally, downloading it if necessary.
@@ -58,10 +55,8 @@ fn validate_segment(s: &str) -> Result<()> {
 /// Returns the path to the dictionary directory.
 pub fn ensure_dictionary(name: &str, base: Option<&Path>) -> Result<PathBuf> {
     let version = lindera::get_version();
-    validate_segment(name)?;
-    validate_segment(version)?;
     let root = dictionaries_root_or(base)?;
-    let dict_dir = root.join(version).join(name);
+    let dict_dir = dictionary_path(name, base)?;
     if dict_dir.is_dir() {
         return Ok(dict_dir);
     }
@@ -161,8 +156,8 @@ pub fn list_dictionaries(base: Option<&Path>) -> Result<Vec<DictEntry>> {
 
 /// Deletes a dictionary by name and version.
 pub fn delete_dictionary(name: &str, version: &str, base: Option<&Path>) -> Result<()> {
-    validate_segment(name)?;
-    validate_segment(version)?;
+    crate::util::validate_path_segment(name, "dictionary name")?;
+    crate::util::validate_path_segment(version, "dictionary version")?;
     let dict_dir = dictionaries_root_or(base)?.join(version).join(name);
     if !dict_dir.is_dir() {
         bail!("dictionary not found: {}", dict_dir.display());
@@ -170,6 +165,54 @@ pub fn delete_dictionary(name: &str, version: &str, base: Option<&Path>) -> Resu
     fs::remove_dir_all(&dict_dir)
         .with_context(|| format!("failed to delete {}", dict_dir.display()))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    #[test]
+    fn dictionary_path_produces_version_and_name_under_base() {
+        let base = Path::new("/tmp/test-dicts");
+        let version = lindera::get_version();
+        let path = dictionary_path(JIEBA, Some(base)).unwrap();
+        assert_eq!(path, base.join(version).join(JIEBA));
+    }
+
+    #[test]
+    fn dictionary_path_rejects_empty_name() {
+        let base = Path::new("/tmp/test-dicts");
+        let err = dictionary_path("", Some(base)).unwrap_err();
+        assert!(err.to_string().contains("must not be empty"));
+    }
+
+    #[test]
+    fn dictionary_path_rejects_name_with_slash() {
+        let base = Path::new("/tmp/test-dicts");
+        let err = dictionary_path("../evil", Some(base)).unwrap_err();
+        assert!(err.to_string().contains("invalid path component"));
+    }
+
+    #[test]
+    fn dictionary_path_rejects_name_with_backslash() {
+        let base = Path::new("/tmp/test-dicts");
+        let err = dictionary_path("evil\\name", Some(base)).unwrap_err();
+        assert!(err.to_string().contains("invalid path component"));
+    }
+
+    #[test]
+    fn dictionary_path_known_dictionaries_are_valid() {
+        let base = Path::new("/tmp/test-dicts");
+        for name in DICTIONARY_NAMES {
+            assert!(
+                dictionary_path(name, Some(base)).is_ok(),
+                "expected {} to be valid",
+                name
+            );
+        }
+    }
 }
 
 /// Removes dictionary directories for versions other than the current `lindera` version.
