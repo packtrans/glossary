@@ -53,15 +53,21 @@ fn validate_segment(s: &str) -> Result<()> {
     Ok(())
 }
 
+/// Returns the expected dictionary directory for a dictionary name and version.
+pub fn dictionary_path(name: &str, base: Option<&Path>) -> Result<PathBuf> {
+    let version = lindera::get_version();
+    validate_segment(name)?;
+    validate_segment(version)?;
+    Ok(dictionaries_root_or(base)?.join(version).join(name))
+}
+
 /// Ensures a dictionary is available locally, downloading it if necessary.
 ///
 /// Returns the path to the dictionary directory.
 pub fn ensure_dictionary(name: &str, base: Option<&Path>) -> Result<PathBuf> {
     let version = lindera::get_version();
-    validate_segment(name)?;
-    validate_segment(version)?;
     let root = dictionaries_root_or(base)?;
-    let dict_dir = root.join(version).join(name);
+    let dict_dir = dictionary_path(name, base)?;
     if dict_dir.is_dir() {
         return Ok(dict_dir);
     }

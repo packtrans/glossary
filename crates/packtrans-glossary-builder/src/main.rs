@@ -1,14 +1,14 @@
 use anyhow::Result;
 use clap::Parser;
 
-use packtrans_glossary_core::{IndexOptions, build_index};
-
 mod cli;
 mod download;
+mod index;
 mod modlist;
 mod util;
 
 use cli::{Cli, Commands};
+use index::{IndexOptions, build_index};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();

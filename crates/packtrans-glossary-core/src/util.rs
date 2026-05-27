@@ -65,9 +65,7 @@ pub fn download_to_file(client: &ureq::Agent, url: &str, path: &Path) -> Result<
             .get(url)
             .call()
             .with_context(|| format!("failed to download {url}"))?;
-        let mut reader = response
-            .into_reader()
-            .take((MAX_DOWNLOAD_BYTES as u64) + 1);
+        let mut reader = response.into_reader().take((MAX_DOWNLOAD_BYTES as u64) + 1);
         let mut file = File::create(&temp_path)
             .with_context(|| format!("failed to create {}", temp_path.display()))?;
         let copied = io::copy(&mut reader, &mut file)

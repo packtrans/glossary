@@ -11,7 +11,7 @@ use crate::dictionary;
 /// - `ja*` → [`dictionary::IPADIC`]
 /// - `ko*` → [`dictionary::KO_DIC`]
 /// - otherwise → `"default"`
-pub(crate) fn target_tokenizer_name(target_language: &str) -> &'static str {
+pub fn target_tokenizer_name(target_language: &str) -> &'static str {
     if target_language == "lzh" || target_language.starts_with("zh") {
         dictionary::JIEBA
     } else if target_language.starts_with("ja") {
@@ -24,7 +24,7 @@ pub(crate) fn target_tokenizer_name(target_language: &str) -> &'static str {
 }
 
 /// Registers the appropriate tokenizer for `target_language` into the given index.
-pub(crate) fn register_for_language(
+pub fn register_for_language(
     index: &Index,
     target_language: &str,
     base: Option<&Path>,

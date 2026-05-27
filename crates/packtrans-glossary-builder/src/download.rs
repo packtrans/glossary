@@ -168,8 +168,7 @@ fn download_modrinth(
             output,
             temp_path,
             url,
-        )
-        {
+        ) {
             eprintln!(
                 "warning: failed to download Modrinth mod {}: {err:#}",
                 mod_entry.slug
@@ -432,8 +431,8 @@ fn extract_minecraft_en_us(jar_path: &Path, output_path: &Path) -> Result<()> {
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let file =
-        fs::File::open(jar_path).with_context(|| format!("failed to open {}", jar_path.display()))?;
+    let file = fs::File::open(jar_path)
+        .with_context(|| format!("failed to open {}", jar_path.display()))?;
     let mut archive = zip::ZipArchive::new(file)
         .with_context(|| format!("failed to read zip archive {}", jar_path.display()))?;
     let mut entry = archive

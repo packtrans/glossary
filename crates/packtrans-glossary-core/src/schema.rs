@@ -5,7 +5,7 @@ use crate::tokenizer;
 
 /// Tantivy schema fields used in the glossary index.
 #[derive(Clone, Copy)]
-pub(crate) struct Fields {
+pub struct Fields {
     /// Field for the mod identifier.
     pub mod_id: Field,
     /// Field for the translation key.
@@ -23,7 +23,7 @@ pub(crate) struct Fields {
 /// Builds the Tantivy [`Schema`] and resolves its [`Fields`].
 ///
 /// Target text indexing options depend on the language tokenizer.
-pub(crate) fn build_schema(target_language: &str) -> (Schema, Fields) {
+pub fn build_schema(target_language: &str) -> (Schema, Fields) {
     let target_text_opts = match tokenizer::target_tokenizer_name(target_language) {
         "default" => TEXT | STORED,
         tokenizer_name => TextOptions::default()
@@ -49,7 +49,7 @@ pub(crate) fn build_schema(target_language: &str) -> (Schema, Fields) {
 }
 
 /// Looks up each field by name from an existing schema.
-pub(crate) fn fields_from_schema(schema: &Schema) -> Result<Fields> {
+pub fn fields_from_schema(schema: &Schema) -> Result<Fields> {
     Ok(Fields {
         mod_id: schema.get_field("mod_id")?,
         key: schema.get_field("key")?,
