@@ -101,26 +101,26 @@ pub fn resolve_query_index_dir(lang: &str, base: Option<&Path>) -> Result<PathBu
     }
 
     match latest_release() {
-        Ok(release) => {
-            match ensure_release_index(lang, base, &release) {
-                Ok(entry) => {
-                    if let Err(e) = clean_old_versions_keep(base, &release.tag_name) {
-                        eprintln!("warning: failed to clean old versions: {}", e);
-                    }
-                    Ok(entry.path)
+        Ok(release) => match ensure_release_index(lang, base, &release) {
+            Ok(entry) => {
+                if let Err(e) = clean_old_versions_keep(base, &release.tag_name) {
+                    eprintln!("warning: failed to clean old versions: {}", e);
                 }
-                Err(install_err) => {
-                    if let Some(entry) = latest_installed_for_lang(lang, base)? {
-                        eprintln!(
-                            "warning: failed to download latest index release ({install_err}); using installed {}@{}",
-                            entry.lang, entry.version
-                        );
-                        return Ok(entry.path);
-                    }
-                    Err(install_err).context("failed to download latest index release and no local index is installed")
-                }
+                Ok(entry.path)
             }
-        }
+            Err(install_err) => {
+                if let Some(entry) = latest_installed_for_lang(lang, base)? {
+                    eprintln!(
+                        "warning: failed to download latest index release ({install_err}); using installed {}@{}",
+                        entry.lang, entry.version
+                    );
+                    return Ok(entry.path);
+                }
+                Err(install_err).context(
+                    "failed to download latest index release and no local index is installed",
+                )
+            }
+        },
         Err(err) => {
             if let Some(entry) = latest_installed_for_lang(lang, base)? {
                 eprintln!(
