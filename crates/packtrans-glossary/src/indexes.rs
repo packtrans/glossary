@@ -393,7 +393,7 @@ fn latest_installed_for_lang(lang: &str, base: Option<&Path>) -> Result<Option<I
     Ok(list_downloaded_indexes(base)?
         .into_iter()
         .filter(|entry| entry.lang == lang)
-        .last())
+        .next_back())
 }
 
 fn delete_downloaded_index(lang: &str, version: &str, base: Option<&Path>) -> Result<()> {
