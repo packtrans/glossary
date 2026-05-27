@@ -19,7 +19,9 @@ use crate::progress;
 pub struct QueryOptions {
     /// The search query string.
     pub query: String,
-    /// Custom path to the index. Uses the default index root if `None`.
+    /// Custom base path to the index root (not language-specific).
+    /// `resolve_query_index_dir` will append the language component to this path.
+    /// Uses the default index root if `None`.
     pub index_path: Option<PathBuf>,
     /// Target language code.
     pub lang: String,

@@ -102,9 +102,22 @@ pub fn resolve_query_index_dir(lang: &str, base: Option<&Path>) -> Result<PathBu
 
     match latest_release() {
         Ok(release) => {
-            let entry = ensure_release_index(lang, base, &release)?;
-            let _ = clean_old_versions_keep(base, &release.tag_name)?;
-            Ok(entry.path)
+            match ensure_release_index(lang, base, &release) {
+                Ok(entry) => {
+                    let _ = clean_old_versions_keep(base, &release.tag_name)?;
+                    Ok(entry.path)
+                }
+                Err(install_err) => {
+                    if let Some(entry) = latest_installed_for_lang(lang, base)? {
+                        eprintln!(
+                            "warning: failed to download latest index release ({install_err}); using installed {}@{}",
+                            entry.lang, entry.version
+                        );
+                        return Ok(entry.path);
+                    }
+                    Err(install_err).context("failed to download latest index release and no local index is installed")
+                }
+            }
         }
         Err(err) => {
             if let Some(entry) = latest_installed_for_lang(lang, base)? {
@@ -323,17 +336,22 @@ fn install_asset(
             )
         })?;
 
-        if final_index_dir.is_dir() {
-            fs::remove_dir_all(&temp_index_dir)
-                .with_context(|| format!("failed to clear {}", temp_index_dir.display()))?;
-        } else {
-            fs::rename(&temp_index_dir, &final_index_dir).with_context(|| {
-                format!(
-                    "failed to move {} to {}",
-                    temp_index_dir.display(),
-                    final_index_dir.display()
-                )
-            })?;
+        match fs::rename(&temp_index_dir, &final_index_dir) {
+            Ok(()) => {}
+            Err(rename_err) => {
+                if final_index_dir.exists() {
+                    // Concurrent installation succeeded; clean up our temp directory
+                    let _ = fs::remove_dir_all(&temp_index_dir);
+                } else {
+                    return Err(rename_err).with_context(|| {
+                        format!(
+                            "failed to move {} to {}",
+                            temp_index_dir.display(),
+                            final_index_dir.display()
+                        )
+                    });
+                }
+            }
         }
 
         Ok(IndexEntry {
