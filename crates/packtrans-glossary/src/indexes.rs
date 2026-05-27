@@ -225,7 +225,7 @@ fn fetch_latest_release() -> Result<Release> {
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| anyhow!("latest glossary index release did not include tag_name"))?
         .to_string();
-    validate_segment(&tag_name)?;
+    util::validate_path_segment(&tag_name, "release tag")?;
 
     let assets = value
         .get("assets")
@@ -417,7 +417,7 @@ fn latest_installed_for_lang(lang: &str, base: Option<&Path>) -> Result<Option<I
 
 fn delete_downloaded_index(lang: &str, version: &str, base: Option<&Path>) -> Result<()> {
     validate_lang(lang)?;
-    validate_segment(version)?;
+    util::validate_path_segment(version, "release tag")?;
     let version_dir = downloaded_indexes_root(base)?.join(version);
     let index_dir = version_dir.join(lang);
     if !index_dir.is_dir() {
@@ -430,7 +430,7 @@ fn delete_downloaded_index(lang: &str, version: &str, base: Option<&Path>) -> Re
 }
 
 fn clean_old_versions_keep(base: Option<&Path>, keep_version: &str) -> Result<Vec<String>> {
-    validate_segment(keep_version)?;
+    util::validate_path_segment(keep_version, "release tag")?;
     let root = downloaded_indexes_root(base)?;
     if !root.is_dir() {
         return Ok(vec![]);
@@ -503,19 +503,9 @@ fn downloaded_indexes_root(base: Option<&Path>) -> Result<PathBuf> {
 }
 
 fn downloaded_index_dir(base: Option<&Path>, version: &str, lang: &str) -> Result<PathBuf> {
-    validate_segment(version)?;
+    util::validate_path_segment(version, "release tag")?;
     validate_lang(lang)?;
     Ok(downloaded_indexes_root(base)?.join(version).join(lang))
-}
-
-fn validate_segment(value: &str) -> Result<()> {
-    if value.is_empty() {
-        bail!("segment must not be empty");
-    }
-    if value.contains("..") || value.contains('/') || value.contains('\\') {
-        bail!("segment contains invalid path component: {}", value);
-    }
-    Ok(())
 }
 
 fn remove_dir_if_empty(path: &Path) -> Result<()> {

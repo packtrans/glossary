@@ -53,6 +53,17 @@ pub fn sanitize_path_part(value: &str) -> String {
     }
 }
 
+/// Validates that `value` is a non-empty path segment without directory traversal.
+pub fn validate_path_segment(value: &str, kind: &str) -> Result<()> {
+    if value.is_empty() {
+        bail!("{kind} must not be empty");
+    }
+    if value.contains("..") || value.contains('/') || value.contains('\\') {
+        bail!("{kind} contains invalid path component: {value}");
+    }
+    Ok(())
+}
+
 /// Downloads a URL to a local file.
 pub fn download_to_file(client: &ureq::Agent, url: &str, path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::util;
-use anyhow::{Result, bail};
+use anyhow::Result;
 
 /// Returns the root directory where search indexes are stored.
 pub fn indexes_root() -> Result<PathBuf> {
@@ -10,11 +10,5 @@ pub fn indexes_root() -> Result<PathBuf> {
 
 /// Validates that `lang` is a non-empty string without path traversal characters.
 pub fn validate_lang(lang: &str) -> Result<()> {
-    if lang.is_empty() {
-        bail!("lang must not be empty");
-    }
-    if lang.contains("..") || lang.contains('/') || lang.contains('\\') {
-        bail!("lang contains invalid characters: {}", lang);
-    }
-    Ok(())
+    util::validate_path_segment(lang, "lang")
 }
