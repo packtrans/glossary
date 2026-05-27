@@ -104,7 +104,9 @@ pub fn resolve_query_index_dir(lang: &str, base: Option<&Path>) -> Result<PathBu
         Ok(release) => {
             match ensure_release_index(lang, base, &release) {
                 Ok(entry) => {
-                    let _ = clean_old_versions_keep(base, &release.tag_name)?;
+                    if let Err(e) = clean_old_versions_keep(base, &release.tag_name) {
+                        eprintln!("warning: failed to clean old versions: {}", e);
+                    }
                     Ok(entry.path)
                 }
                 Err(install_err) => {
