@@ -59,8 +59,9 @@ pub fn validate_path_segment(value: &str, kind: &str) -> Result<()> {
         bail!("{kind} must not be empty");
     }
     let mut components = Path::new(value).components();
-    let is_single_normal_component = matches!(components.next(), Some(std::path::Component::Normal(_)))
-        && components.next().is_none();
+    let is_single_normal_component =
+        matches!(components.next(), Some(std::path::Component::Normal(_)))
+            && components.next().is_none();
     if value.contains('\\') || !is_single_normal_component {
         bail!("{kind} contains invalid path component: {value}");
     }

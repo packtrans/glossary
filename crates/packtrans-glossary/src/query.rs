@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use packtrans_glossary_core::dictionary;
 use packtrans_glossary_core::schema::fields_from_schema;
 use packtrans_glossary_core::{tokenizer, util};
+use serde::Serialize;
 use tantivy::{
     Index, TantivyDocument,
     collector::TopDocs,
@@ -32,11 +33,41 @@ pub struct QueryOptions {
     pub dict_path: Option<PathBuf>,
 }
 
+/// A single glossary search hit.
+#[derive(Debug, Serialize)]
+pub struct QueryHit {
+    pub confidence: f32,
+    pub mod_id: String,
+    pub key: String,
+    pub source: String,
+    pub source_lang: String,
+    pub target_lang: String,
+    pub target: String,
+}
+
 /// Queries a Tantivy index and prints matching documents.
 pub fn query_index(options: QueryOptions) -> Result<()> {
+    let hits = search_index(options)?;
+    println!("confidence\tmod_id\tkey\tsource\tsource_lang\ttarget_lang\ttarget");
+    for hit in hits {
+        println!(
+            "{:.2}\t{}\t{}\t{}\t{}\t{}\t{}",
+            hit.confidence,
+            hit.mod_id,
+            hit.key,
+            hit.source,
+            hit.source_lang,
+            hit.target_lang,
+            hit.target
+        );
+    }
+    Ok(())
+}
+
+/// Queries a Tantivy index and returns matching documents.
+pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
     util::validate_path_segment(&options.lang, "lang")?;
-    let index_dir =
-        indexes::resolve_query_index_dir(&options.lang, options.index_dir.as_deref())?;
+    let index_dir = indexes::resolve_query_index_dir(&options.lang, options.index_dir.as_deref())?;
     let dir = MmapDirectory::open(&index_dir)
         .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;
     let index = Index::open(dir)
@@ -76,21 +107,33 @@ pub fn query_index(options: QueryOptions) -> Result<()> {
         fields.target_lang
     };
 
-    println!("confidence\tmod_id\tkey\tsource\tsource_lang\ttarget_lang\ttarget");
+    let mut hits = Vec::with_capacity(top_docs.len());
     for (score, address) in top_docs {
         let doc: TantivyDocument = searcher.doc(address)?;
-        println!(
-            "{score:.2}\t{}\t{}\t{}\t{}\t{}\t{}",
-            stored_text(&doc, fields.mod_id),
-            stored_text(&doc, fields.key),
-            stored_text(&doc, out_src_field),
-            stored_text(&doc, out_src_lang_field),
-            stored_text(&doc, out_tgt_lang_field),
-            stored_text(&doc, out_tgt_field)
-        );
+        hits.push(QueryHit {
+            confidence: score,
+            mod_id: stored_text(&doc, fields.mod_id).to_owned(),
+            key: stored_text(&doc, fields.key).to_owned(),
+            source: stored_text(&doc, out_src_field).to_owned(),
+            source_lang: stored_text(&doc, out_src_lang_field).to_owned(),
+            target_lang: stored_text(&doc, out_tgt_lang_field).to_owned(),
+            target: stored_text(&doc, out_tgt_field).to_owned(),
+        });
     }
 
-    Ok(())
+    Ok(hits)
+}
+
+/// Validates HTTP query `limit` (default 10, maximum 50).
+pub fn validate_http_limit(limit: Option<usize>) -> Result<usize> {
+    const DEFAULT: usize = 10;
+    const MAX: usize = 50;
+    match limit {
+        None => Ok(DEFAULT),
+        Some(0) => bail!("limit must be at least 1"),
+        Some(n) if n > MAX => bail!("limit must be at most {MAX}"),
+        Some(n) => Ok(n),
+    }
 }
 
 fn ensure_tokenizer_dictionary(lang: &str, base: Option<&std::path::Path>) -> Result<()> {
@@ -115,4 +158,18 @@ fn stored_text(doc: &TantivyDocument, field: Field) -> &str {
     doc.get_first(field)
         .and_then(|value| value.as_str())
         .unwrap_or("")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_limit_defaults_and_caps() {
+        assert_eq!(validate_http_limit(None).unwrap(), 10);
+        assert_eq!(validate_http_limit(Some(1)).unwrap(), 1);
+        assert_eq!(validate_http_limit(Some(50)).unwrap(), 50);
+        assert!(validate_http_limit(Some(0)).is_err());
+        assert!(validate_http_limit(Some(51)).is_err());
+    }
 }

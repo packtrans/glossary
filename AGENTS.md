@@ -27,7 +27,7 @@ cargo fmt -- --check # Format check
 
 The builder has three subcommands: `index` (build a Tantivy index from language files), `create-mod-list` (fetch mod lists from APIs), and `download` (download mod jar language files from Modrinth/CurseForge/Minecraft).
 
-The query CLI supports `query` (search translations, with `--inverse` for reverse lookup), `dict` (manage Lindera dictionaries), and `index` (manage release-downloaded indexes in the default data directory).
+The query CLI supports `query` (search translations, with `--inverse` for reverse lookup), `serve` (HTTP API for queries), `dict` (manage Lindera dictionaries), and `index` (manage release-downloaded indexes in the default data directory).
 
 ### Index paths
 

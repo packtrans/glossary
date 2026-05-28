@@ -5,8 +5,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
-use packtrans_glossary_core::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
 use packtrans_glossary_core::util;
+use packtrans_glossary_core::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
 use serde_json::json;
 
 use crate::progress;
@@ -138,9 +138,9 @@ fn resolve_downloaded_index_dir(
     let version = if let Some(release) = &checked_release {
         release.tag_name.as_str()
     } else {
-        meta.current_version.as_deref().ok_or_else(|| {
-            anyhow!("no downloaded index version recorded in meta.json")
-        })?
+        meta.current_version
+            .as_deref()
+            .ok_or_else(|| anyhow!("no downloaded index version recorded in meta.json"))?
     };
 
     let index_dir = release_index_dir(&root, version, lang)?;
@@ -648,10 +648,9 @@ fn read_downloaded_meta(index_root: &Path) -> Result<DownloadedIndexMeta> {
         return Ok(DownloadedIndexMeta::default());
     }
 
-    let bytes = fs::read(&path)
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    let value: serde_json::Value =
-        serde_json::from_slice(&bytes).with_context(|| format!("failed to parse {}", path.display()))?;
+    let bytes = fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
 
     Ok(DownloadedIndexMeta {
         latest_version_check_time: value
@@ -839,8 +838,14 @@ mod tests {
             current_version: Some("index-20260526".to_string()),
             ..Default::default()
         };
-        assert!(!should_check_latest_version(&meta, 1_000 + VERSION_CHECK_INTERVAL.as_secs() - 1));
-        assert!(should_check_latest_version(&meta, 1_000 + VERSION_CHECK_INTERVAL.as_secs()));
+        assert!(!should_check_latest_version(
+            &meta,
+            1_000 + VERSION_CHECK_INTERVAL.as_secs() - 1
+        ));
+        assert!(should_check_latest_version(
+            &meta,
+            1_000 + VERSION_CHECK_INTERVAL.as_secs()
+        ));
 
         let no_version = DownloadedIndexMeta {
             latest_version_check_time: Some(1_000),
