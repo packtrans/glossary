@@ -64,7 +64,7 @@ struct QueryCommand {
     #[arg(long)]
     lang: String,
 
-    #[arg(long, default_value_t = 20)]
+    #[arg(long, default_value_t = 10)]
     limit: usize,
 
     #[arg(long)]
