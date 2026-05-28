@@ -35,11 +35,12 @@ cargo run --bin packtrans-glossary-builder -- download --platform minecraft --ou
 
 # Build an index from downloaded language files
 cargo run --bin packtrans-glossary-builder -- index --scan-dir res --lang zh_cn --out indexes
+# writes to indexes/zh_cn
 
 # Query a release-managed index (downloads to the default data dir when needed)
 cargo run --bin packtrans-glossary -- query --lang zh_cn "Cooking Pot" --limit 10
 
-# Query a locally built index
+# Query a locally built index (reads indexes/zh_cn)
 cargo run --bin packtrans-glossary -- query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 10
 
 # Inverse query (search by target language text)

@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 use packtrans_glossary_core::schema::build_schema;
-use packtrans_glossary_core::{text_component, tokenizer, util};
+use packtrans_glossary_core::{lang_index_dir, text_component, tokenizer, util};
 use serde_json::Value;
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
@@ -12,7 +12,7 @@ pub struct IndexOptions {
     pub scan_dir: PathBuf,
     /// Target language code (used to locate tokenizer and output sub-directory).
     pub lang: String,
-    /// Tantivy index directory to create (`--lang` selects tokenizer and language files only).
+    /// Index root directory; output is written to `{out}/{lang}`.
     pub out: PathBuf,
     /// Custom base path for dictionary lookup.
     pub dict_path: Option<PathBuf>,
@@ -30,7 +30,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
         );
     }
 
-    let index_dir = &options.out;
+    let index_dir = lang_index_dir(&options.out, &options.lang)?;
 
     if let Ok(metadata) = index_dir.metadata() {
         if !metadata.is_dir() {
@@ -55,7 +55,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
             )
         })?;
     }
-    fs::create_dir_all(index_dir).with_context(|| {
+    fs::create_dir_all(&index_dir).with_context(|| {
         format!(
             "failed to create index db directory: {}",
             index_dir.display()
@@ -63,7 +63,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
     })?;
 
     let (schema, fields) = build_schema(&options.lang);
-    let dir = MmapDirectory::open(index_dir)
+    let dir = MmapDirectory::open(&index_dir)
         .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;
     let index = Index::create(dir, schema, IndexSettings::default())
         .with_context(|| format!("failed to create index: {}", index_dir.display()))?;

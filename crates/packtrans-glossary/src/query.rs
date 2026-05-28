@@ -19,7 +19,7 @@ use crate::progress;
 pub struct QueryOptions {
     /// The search query string.
     pub query: String,
-    /// Path to a local Tantivy index directory (must not include the language code).
+    /// Local index root directory; queries `{index_dir}/{lang}`.
     /// When `None`, uses a release download from the default index root.
     pub index_dir: Option<PathBuf>,
     /// Target language code.

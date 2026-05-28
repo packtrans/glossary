@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
-use packtrans_glossary_core::{index_meta_path, indexes_root, release_index_dir};
+use packtrans_glossary_core::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
 use packtrans_glossary_core::util;
 use serde_json::json;
 
@@ -102,11 +102,12 @@ pub fn run(command: IndexCommand) -> Result<()> {
 
 pub fn resolve_query_index_dir(lang: &str, index_dir: Option<&Path>) -> Result<PathBuf> {
     util::validate_path_segment(lang, "lang")?;
-    if let Some(path) = index_dir {
+    if let Some(base) = index_dir {
+        let path = lang_index_dir(base, lang)?;
         if !path.is_dir() {
             bail!("index directory does not exist: {}", path.display());
         }
-        return Ok(path.to_path_buf());
+        return Ok(path);
     }
 
     let path = resolve_downloaded_index_dir(lang, None, false)?;
@@ -799,10 +800,11 @@ mod tests {
     #[test]
     fn uses_explicit_index_dir_when_provided() {
         let root = temp_root("explicit-index-dir");
-        let local_index = root.join("my-index");
+        let index_root = root.join("indexes");
+        let local_index = index_root.join("zh_cn");
         fs::create_dir_all(&local_index).unwrap();
 
-        let resolved = resolve_query_index_dir("zh_cn", Some(&local_index)).unwrap();
+        let resolved = resolve_query_index_dir("zh_cn", Some(&index_root)).unwrap();
         assert_eq!(resolved, local_index);
 
         let _ = fs::remove_dir_all(&root);

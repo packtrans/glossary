@@ -26,7 +26,7 @@ pub struct IndexCommand {
     pub scan_dir: PathBuf,
     #[arg(long)]
     pub lang: String,
-    /// Tantivy index directory to create (do not include the language code in this path).
+    /// Index root directory; the index is written to `{out}/{lang}`.
     #[arg(long)]
     pub out: PathBuf,
 }

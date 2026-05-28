@@ -16,6 +16,12 @@ pub fn index_meta_path(index_root: &Path) -> PathBuf {
     index_root.join(INDEX_META_FILE)
 }
 
+/// Returns `base/{lang}` for a local index root passed to `--out` or `--index-dir`.
+pub fn lang_index_dir(base: &Path, lang: &str) -> Result<PathBuf> {
+    util::validate_path_segment(lang, "lang")?;
+    Ok(base.join(lang))
+}
+
 /// Returns `index-root/{version}/{lang}`.
 pub fn release_index_dir(index_root: &Path, version: &str, lang: &str) -> Result<PathBuf> {
     util::validate_path_segment(version, "release tag")?;
