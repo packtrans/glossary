@@ -6,7 +6,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
 use packtrans_glossary_core::util;
-use packtrans_glossary_core::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
+use packtrans_glossary_core::{
+    index_meta_path, indexes_root, keyed_lock, lang_index_dir, release_index_dir,
+};
 use serde_json::json;
 
 use crate::progress;
@@ -236,10 +238,12 @@ fn clean(cmd: IndexCleanCommand, base: Option<&Path>) -> Result<()> {
 }
 
 fn fetch_latest_release() -> Result<Release> {
-    let pb = progress::spinner("Checking latest glossary index release");
-    let result = fetch_latest_release_inner();
-    pb.finish_and_clear();
-    result
+    keyed_lock::with_key_lock("index-release:latest", || {
+        let pb = progress::spinner("Checking latest glossary index release");
+        let result = fetch_latest_release_inner();
+        pb.finish_and_clear();
+        result
+    })
 }
 
 fn fetch_latest_release_inner() -> Result<Release> {
@@ -299,11 +303,23 @@ fn ensure_release_index(lang: &str, base: Option<&Path>, release: &Release) -> R
         });
     }
 
-    let asset = select_asset(release, lang)?;
-    let pb = progress::spinner(format!("Downloading {lang} index {}", release.tag_name));
-    let result = install_asset(lang, base, release, asset);
-    pb.finish_and_clear();
-    result
+    let lock_key = format!("index:{}:{}:{}", root.display(), release.tag_name, lang);
+    keyed_lock::with_key_lock(&lock_key, || {
+        let index_dir = release_index_dir(&root, &release.tag_name, lang)?;
+        if index_dir.is_dir() {
+            return Ok(IndexEntry {
+                lang: lang.to_string(),
+                version: release.tag_name.clone(),
+                path: index_dir,
+            });
+        }
+
+        let asset = select_asset(release, lang)?;
+        let pb = progress::spinner(format!("Downloading {lang} index {}", release.tag_name));
+        let result = install_asset(lang, base, release, asset);
+        pb.finish_and_clear();
+        result
+    })
 }
 
 fn install_asset(

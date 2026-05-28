@@ -89,14 +89,14 @@ async fn query_handler(
     State(state): State<Arc<AppState>>,
     Query(params): Query<HttpQueryParams>,
 ) -> Response {
-    match handle_query(&state, params).await {
+    match handle_query(state, params).await {
         Ok(hits) => Json(hits).into_response(),
         Err(err) => err.into_response(),
     }
 }
 
 async fn handle_query(
-    state: &AppState,
+    state: Arc<AppState>,
     params: HttpQueryParams,
 ) -> Result<Vec<QueryHit>, ApiError> {
     if params.q.is_empty() {
@@ -109,15 +109,20 @@ async fn handle_query(
     }
     let limit =
         validate_http_limit(params.limit).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    search_index(QueryOptions {
+
+    let options = QueryOptions {
         query: params.q,
         index_dir: state.index_dir.clone(),
         lang: params.lang,
         limit,
         inverse: params.inverse,
         dict_path: state.dict_path.clone(),
-    })
-    .map_err(ApiError::internal)
+    };
+
+    tokio::task::spawn_blocking(move || search_index(options))
+        .await
+        .map_err(|e| ApiError::internal(anyhow::anyhow!("search task panicked: {e}")))?
+        .map_err(ApiError::internal)
 }
 
 enum ApiError {
