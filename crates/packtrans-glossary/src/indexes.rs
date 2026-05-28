@@ -129,7 +129,6 @@ fn resolve_downloaded_index_dir(
     let checked_release = if force_version_check || should_check_latest_version(&meta, now) {
         let release = fetch_latest_release()?;
         meta.latest_version_check_time = Some(now);
-        meta.current_version = Some(release.tag_name.clone());
         write_downloaded_meta(&root, &meta)?;
         Some(release)
     } else {
@@ -523,24 +522,22 @@ fn select_asset<'a>(release: &'a Release, lang: &str) -> Result<&'a ReleaseAsset
         .iter()
         .find(|asset| asset.name.starts_with(&prefix) && asset.name.ends_with(".zip"))
         .ok_or_else(|| {
-            let available = available_languages(release).join(", ");
+            let available = match available_languages(release) {
+                Ok(langs) if langs.is_empty() => "none".to_string(),
+                Ok(langs) => langs.join(", "),
+                Err(err) => format!("unknown ({err})"),
+            };
             anyhow!(
                 "release {} has no index asset for {}. Available languages: {}",
                 release.tag_name,
                 lang,
-                if available.is_empty() {
-                    "none".to_string()
-                } else {
-                    available
-                }
+                available
             )
         })
 }
 
-fn available_languages(release: &Release) -> Vec<String> {
-    fetch_available_languages(&release.tag_name).unwrap_or_else(|_| {
-        available_languages_from_assets(release)
-    })
+fn available_languages(release: &Release) -> Result<Vec<String>> {
+    fetch_available_languages(&release.tag_name)
 }
 
 fn fetch_available_languages(tag: &str) -> Result<Vec<String>> {
@@ -585,18 +582,6 @@ fn fetch_available_languages(tag: &str) -> Result<Vec<String>> {
         bail!("available languages response did not include any languages");
     }
     Ok(langs)
-}
-
-fn available_languages_from_assets(release: &Release) -> Vec<String> {
-    let mut langs = release
-        .assets
-        .iter()
-        .filter_map(|asset| asset.name.strip_prefix("packtrans-glossary-index-"))
-        .filter_map(|rest| rest.rsplit_once('-').map(|(lang, _)| lang.to_string()))
-        .collect::<Vec<_>>();
-    langs.sort();
-    langs.dedup();
-    langs
 }
 
 fn resolve_keep_version_for_clean(base: Option<&Path>) -> Result<String> {
@@ -681,6 +666,9 @@ fn write_downloaded_meta(index_root: &Path, meta: &DownloadedIndexMeta) -> Resul
 }
 
 fn should_check_latest_version(meta: &DownloadedIndexMeta, now: u64) -> bool {
+    if meta.current_version.is_none() {
+        return true;
+    }
     match meta.latest_version_check_time {
         None => true,
         Some(last_check) => now.saturating_sub(last_check) >= VERSION_CHECK_INTERVAL.as_secs(),
@@ -791,10 +779,20 @@ mod tests {
     fn version_check_is_throttled_for_one_day() {
         let meta = DownloadedIndexMeta {
             latest_version_check_time: Some(1_000),
+            current_version: Some("index-20260526".to_string()),
             ..Default::default()
         };
         assert!(!should_check_latest_version(&meta, 1_000 + VERSION_CHECK_INTERVAL.as_secs() - 1));
         assert!(should_check_latest_version(&meta, 1_000 + VERSION_CHECK_INTERVAL.as_secs()));
+
+        let no_version = DownloadedIndexMeta {
+            latest_version_check_time: Some(1_000),
+            ..Default::default()
+        };
+        assert!(should_check_latest_version(
+            &no_version,
+            1_000 + VERSION_CHECK_INTERVAL.as_secs() - 1
+        ));
     }
 
     #[test]
