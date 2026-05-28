@@ -116,7 +116,7 @@ packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 
 **Options:**
 - `--lang` and query text are required.
 - `--index-dir` is an index root; the index at `{index-dir}/{lang}` is used (same layout as `index --out`). When omitted, a release index is downloaded or opened from the default data directory.
-- `--limit` is optional; defaults to `20`.
+- `--limit` is optional; defaults to `10`.
 - `--inverse` searches target-language text and returns the source translation.
 - `--dict-path` optionally overrides the dictionary storage location (global query flag).
 
