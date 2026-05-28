@@ -51,6 +51,10 @@ cargo run --bin packtrans-glossary -- query --index-dir indexes --lang zh_cn "Co
 # Inverse query (search by target language text)
 cargo run --bin packtrans-glossary -- query --lang zh_cn "厨锅" --limit 10 --inverse
 
+# HTTP server (default bind 127.0.0.1:8080; limit defaults to 10, max 50)
+cargo run --bin packtrans-glossary -- serve
+# GET /query?lang=zh_cn&q=Cooking+Pot&limit=20&inverse=true
+
 # Manage release indexes (default data dir)
 cargo run --bin packtrans-glossary -- index download --lang zh_cn
 cargo run --bin packtrans-glossary -- index ls
