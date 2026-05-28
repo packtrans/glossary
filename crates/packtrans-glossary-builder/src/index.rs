@@ -12,7 +12,7 @@ pub struct IndexOptions {
     pub scan_dir: PathBuf,
     /// Target language code (used to locate tokenizer and output sub-directory).
     pub lang: String,
-    /// Path to the Tantivy index directory to create.
+    /// Tantivy index directory to create (`--lang` selects tokenizer and language files only).
     pub out: PathBuf,
     /// Custom base path for dictionary lookup.
     pub dict_path: Option<PathBuf>,

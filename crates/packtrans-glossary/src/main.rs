@@ -57,7 +57,7 @@ fn main() -> Result<()> {
 struct QueryCommand {
     query: String,
 
-    /// Path to a local Tantivy index directory (from `packtrans-glossary-builder index --out`).
+    /// Path to a local Tantivy index directory (same path as `packtrans-glossary-builder index --out`; do not include the language code in this path).
     #[arg(long)]
     index_dir: Option<PathBuf>,
 
