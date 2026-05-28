@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use packtrans_glossary_core::dictionary;
 use packtrans_glossary_core::schema::fields_from_schema;
 use packtrans_glossary_core::{tokenizer, util};
@@ -124,18 +124,6 @@ pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
     Ok(hits)
 }
 
-/// Validates HTTP query `limit` (default 10, maximum 50).
-pub fn validate_http_limit(limit: Option<usize>) -> Result<usize> {
-    const DEFAULT: usize = 10;
-    const MAX: usize = 50;
-    match limit {
-        None => Ok(DEFAULT),
-        Some(0) => bail!("limit must be at least 1"),
-        Some(n) if n > MAX => bail!("limit must be at most {MAX}"),
-        Some(n) => Ok(n),
-    }
-}
-
 fn ensure_tokenizer_dictionary(lang: &str, base: Option<&std::path::Path>) -> Result<()> {
     let name = tokenizer::target_tokenizer_name(lang);
     if name == "default" {
@@ -158,18 +146,4 @@ fn stored_text(doc: &TantivyDocument, field: Field) -> &str {
     doc.get_first(field)
         .and_then(|value| value.as_str())
         .unwrap_or("")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn http_limit_defaults_and_caps() {
-        assert_eq!(validate_http_limit(None).unwrap(), 10);
-        assert_eq!(validate_http_limit(Some(1)).unwrap(), 1);
-        assert_eq!(validate_http_limit(Some(50)).unwrap(), 50);
-        assert!(validate_http_limit(Some(0)).is_err());
-        assert!(validate_http_limit(Some(51)).is_err());
-    }
 }

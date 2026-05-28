@@ -1,8 +1,7 @@
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use axum::{
     Json, Router,
     extract::{Query, State},
@@ -13,17 +12,33 @@ use axum::{
 use clap::Args;
 use serde::Deserialize;
 
-use crate::query::{QueryHit, QueryOptions, search_index, validate_http_limit};
+use crate::query::{QueryHit, QueryOptions, search_index};
 
 #[derive(Args)]
 pub struct ServeCommand {
-    /// Socket address to bind (for example `127.0.0.1:8080`).
-    #[arg(long, default_value = "127.0.0.1:8080")]
-    pub bind: String,
+    /// Host address to bind.
+    #[arg(long, default_value = "127.0.0.1")]
+    pub host: String,
+
+    /// TCP port to bind.
+    #[arg(long, default_value_t = 8080)]
+    pub port: u16,
 
     /// Local index root directory; queries `{index_dir}/{lang}` (same layout as `index --out`).
     #[arg(long)]
     pub index_dir: Option<PathBuf>,
+}
+
+/// Validates HTTP query `limit` (default 10, maximum 50).
+fn validate_http_limit(limit: Option<usize>) -> Result<usize> {
+    const DEFAULT: usize = 10;
+    const MAX: usize = 50;
+    match limit {
+        None => Ok(DEFAULT),
+        Some(0) => bail!("limit must be at least 1"),
+        Some(n) if n > MAX => bail!("limit must be at most {MAX}"),
+        Some(n) => Ok(n),
+    }
 }
 
 #[derive(Clone)]
@@ -49,10 +64,7 @@ struct ErrorBody {
 }
 
 pub async fn run(cmd: ServeCommand, dict_path: Option<PathBuf>) -> Result<()> {
-    let addr: SocketAddr = cmd
-        .bind
-        .parse()
-        .with_context(|| format!("invalid bind address: {}", cmd.bind))?;
+    let bind_addr = format!("{}:{}", cmd.host, cmd.port);
 
     let state = Arc::new(AppState {
         index_dir: cmd.index_dir,
@@ -63,10 +75,10 @@ pub async fn run(cmd: ServeCommand, dict_path: Option<PathBuf>) -> Result<()> {
         .route("/query", get(query_handler))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(addr)
+    let listener = tokio::net::TcpListener::bind(&bind_addr)
         .await
-        .with_context(|| format!("failed to bind to {addr}"))?;
-    eprintln!("listening on http://{addr}");
+        .with_context(|| format!("failed to bind to {bind_addr}"))?;
+    eprintln!("listening on http://{bind_addr}");
     axum::serve(listener, app)
         .await
         .context("HTTP server exited with an error")?;
@@ -130,5 +142,19 @@ impl IntoResponse for ApiError {
             Self::Internal(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
         };
         (status, Json(ErrorBody { error: message })).into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_limit_defaults_and_caps() {
+        assert_eq!(validate_http_limit(None).unwrap(), 10);
+        assert_eq!(validate_http_limit(Some(1)).unwrap(), 1);
+        assert_eq!(validate_http_limit(Some(50)).unwrap(), 50);
+        assert!(validate_http_limit(Some(0)).is_err());
+        assert!(validate_http_limit(Some(51)).is_err());
     }
 }
