@@ -6,11 +6,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
 use packtrans_glossary_core::util;
-use packtrans_glossary_core::{
-    index_meta_path, indexes_root, keyed_lock, lang_index_dir, release_index_dir,
-};
+use packtrans_glossary_core::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
 use serde_json::json;
 
+use crate::download_guard::{DownloadCoordinator, with_download_lock};
 use crate::progress;
 
 const GLOSSARY_INDEXES_LATEST_RELEASE_URL: &str =
@@ -102,7 +101,11 @@ pub fn run(command: IndexCommand) -> Result<()> {
     }
 }
 
-pub fn resolve_query_index_dir(lang: &str, index_dir: Option<&Path>) -> Result<PathBuf> {
+pub fn resolve_query_index_dir(
+    lang: &str,
+    index_dir: Option<&Path>,
+    download_guard: Option<&DownloadCoordinator>,
+) -> Result<PathBuf> {
     util::validate_path_segment(lang, "lang")?;
     if let Some(base) = index_dir {
         let path = lang_index_dir(base, lang)?;
@@ -112,7 +115,7 @@ pub fn resolve_query_index_dir(lang: &str, index_dir: Option<&Path>) -> Result<P
         return Ok(path);
     }
 
-    let path = resolve_downloaded_index_dir(lang, None, false)?;
+    let path = resolve_downloaded_index_dir(lang, None, false, download_guard)?;
     if let Err(e) = clean_old_versions_from_meta(None) {
         eprintln!("warning: failed to clean old versions: {}", e);
     }
@@ -123,13 +126,14 @@ fn resolve_downloaded_index_dir(
     lang: &str,
     base: Option<&Path>,
     force_version_check: bool,
+    download_guard: Option<&DownloadCoordinator>,
 ) -> Result<PathBuf> {
     let root = indexes_root_or(base)?;
     let mut meta = read_downloaded_meta(&root)?;
     let now = unix_now();
 
     let checked_release = if force_version_check || should_check_latest_version(&meta, now) {
-        let release = fetch_latest_release()?;
+        let release = fetch_latest_release(download_guard)?;
         meta.latest_version_check_time = Some(now);
         write_downloaded_meta(&root, &meta)?;
         Some(release)
@@ -156,10 +160,10 @@ fn resolve_downloaded_index_dir(
 
     let release = match checked_release {
         Some(release) => release,
-        None => fetch_latest_release()?,
+        None => fetch_latest_release(download_guard)?,
     };
 
-    let entry = ensure_release_index(lang, base, &release)?;
+    let entry = ensure_release_index(lang, base, &release, download_guard)?;
     meta.current_version = Some(release.tag_name.clone());
     meta.current_version_downloaded_time = Some(now);
     meta.latest_version_check_time = Some(now);
@@ -168,14 +172,14 @@ fn resolve_downloaded_index_dir(
 }
 
 fn download_latest(lang: &str, base: Option<&Path>, clean_old: bool) -> Result<IndexEntry> {
-    let release = fetch_latest_release()?;
+    let release = fetch_latest_release(None)?;
     let root = indexes_root_or(base)?;
     let now = unix_now();
     let mut meta = read_downloaded_meta(&root)?;
     meta.latest_version_check_time = Some(now);
     write_downloaded_meta(&root, &meta)?;
 
-    let entry = ensure_release_index(lang, base, &release)?;
+    let entry = ensure_release_index(lang, base, &release, None)?;
     meta.current_version = Some(release.tag_name.clone());
     meta.current_version_downloaded_time = Some(now);
     meta.latest_version_check_time = Some(now);
@@ -237,8 +241,8 @@ fn clean(cmd: IndexCleanCommand, base: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
-fn fetch_latest_release() -> Result<Release> {
-    keyed_lock::with_key_lock("index-release:latest", || {
+fn fetch_latest_release(download_guard: Option<&DownloadCoordinator>) -> Result<Release> {
+    with_download_lock(download_guard, "index-release:latest", || {
         let pb = progress::spinner("Checking latest glossary index release");
         let result = fetch_latest_release_inner();
         pb.finish_and_clear();
@@ -291,7 +295,12 @@ fn fetch_latest_release_inner() -> Result<Release> {
     Ok(Release { tag_name, assets })
 }
 
-fn ensure_release_index(lang: &str, base: Option<&Path>, release: &Release) -> Result<IndexEntry> {
+fn ensure_release_index(
+    lang: &str,
+    base: Option<&Path>,
+    release: &Release,
+    download_guard: Option<&DownloadCoordinator>,
+) -> Result<IndexEntry> {
     util::validate_path_segment(lang, "lang")?;
     let root = indexes_root_or(base)?;
     let index_dir = release_index_dir(&root, &release.tag_name, lang)?;
@@ -304,7 +313,7 @@ fn ensure_release_index(lang: &str, base: Option<&Path>, release: &Release) -> R
     }
 
     let lock_key = format!("index:{}:{}:{}", root.display(), release.tag_name, lang);
-    keyed_lock::with_key_lock(&lock_key, || {
+    with_download_lock(download_guard, &lock_key, || {
         let index_dir = release_index_dir(&root, &release.tag_name, lang)?;
         if index_dir.is_dir() {
             return Ok(IndexEntry {
@@ -617,7 +626,7 @@ fn resolve_keep_version_for_clean(base: Option<&Path>) -> Result<String> {
     if let Some(version) = latest_installed_version(base) {
         return Ok(version);
     }
-    Ok(fetch_latest_release()?.tag_name)
+    Ok(fetch_latest_release(None)?.tag_name)
 }
 
 fn latest_installed_version(base: Option<&Path>) -> Option<String> {
@@ -880,7 +889,7 @@ mod tests {
         let local_index = index_root.join("zh_cn");
         fs::create_dir_all(&local_index).unwrap();
 
-        let resolved = resolve_query_index_dir("zh_cn", Some(&index_root)).unwrap();
+        let resolved = resolve_query_index_dir("zh_cn", Some(&index_root), None).unwrap();
         assert_eq!(resolved, local_index);
 
         let _ = fs::remove_dir_all(&root);

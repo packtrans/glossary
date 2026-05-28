@@ -1,6 +1,5 @@
 pub mod dictionary;
 mod index;
-pub mod keyed_lock;
 pub mod schema;
 pub mod text_component;
 pub mod tokenizer;

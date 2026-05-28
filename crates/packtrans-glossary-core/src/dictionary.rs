@@ -4,8 +4,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::keyed_lock;
-
 pub const IPADIC: &str = "lindera-ipadic";
 pub const KO_DIC: &str = "lindera-ko-dic";
 pub const JIEBA: &str = "lindera-jieba";
@@ -60,17 +58,6 @@ pub fn dictionary_path(name: &str, base: Option<&Path>) -> Result<PathBuf> {
 ///
 /// Returns the path to the dictionary directory.
 pub fn ensure_dictionary(name: &str, base: Option<&Path>) -> Result<PathBuf> {
-    let root = dictionaries_root_or(base)?;
-    let dict_dir = dictionary_path(name, base)?;
-    if dict_dir.is_dir() {
-        return Ok(dict_dir);
-    }
-
-    let lock_key = format!("dict:{}:{}", root.display(), name);
-    keyed_lock::with_key_lock(&lock_key, || ensure_dictionary_locked(name, base))
-}
-
-fn ensure_dictionary_locked(name: &str, base: Option<&Path>) -> Result<PathBuf> {
     let version = lindera::get_version();
     let root = dictionaries_root_or(base)?;
     let dict_dir = dictionary_path(name, base)?;

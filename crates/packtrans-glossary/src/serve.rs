@@ -12,6 +12,7 @@ use axum::{
 use clap::Args;
 use serde::Deserialize;
 
+use crate::download_guard::DownloadCoordinator;
 use crate::query::{QueryHit, QueryOptions, search_index};
 
 #[derive(Args)]
@@ -45,6 +46,7 @@ fn validate_http_limit(limit: Option<usize>) -> Result<usize> {
 struct AppState {
     index_dir: Option<PathBuf>,
     dict_path: Option<PathBuf>,
+    download_guard: Arc<DownloadCoordinator>,
 }
 
 #[derive(Deserialize)]
@@ -69,6 +71,7 @@ pub async fn run(cmd: ServeCommand, dict_path: Option<PathBuf>) -> Result<()> {
     let state = Arc::new(AppState {
         index_dir: cmd.index_dir,
         dict_path,
+        download_guard: Arc::new(DownloadCoordinator::new()),
     });
 
     let app = Router::new()
@@ -117,6 +120,7 @@ async fn handle_query(
         limit,
         inverse: params.inverse,
         dict_path: state.dict_path.clone(),
+        download_guard: Some(Arc::clone(&state.download_guard)),
     };
 
     tokio::task::spawn_blocking(move || search_index(options))

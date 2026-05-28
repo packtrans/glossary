@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 
 mod dict;
+mod download_guard;
 mod indexes;
 mod progress;
 mod query;
@@ -50,6 +51,7 @@ fn main() -> Result<()> {
             limit: cmd.limit,
             inverse: cmd.inverse,
             dict_path: cli.dict_path,
+            download_guard: None,
         }),
         Commands::Serve(cmd) => {
             let rt = tokio::runtime::Runtime::new().context("failed to start async runtime")?;
