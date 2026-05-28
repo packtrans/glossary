@@ -11,9 +11,6 @@ pub struct Cli {
 
     #[arg(long)]
     pub dict_path: Option<PathBuf>,
-
-    #[arg(long)]
-    pub index_path: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -29,6 +26,8 @@ pub struct IndexCommand {
     pub scan_dir: PathBuf,
     #[arg(long)]
     pub lang: String,
+    #[arg(long)]
+    pub out: PathBuf,
 }
 
 #[derive(Args)]

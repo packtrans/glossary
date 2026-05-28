@@ -19,10 +19,9 @@ use crate::progress;
 pub struct QueryOptions {
     /// The search query string.
     pub query: String,
-    /// Custom base path to the index root (not language-specific).
-    /// `resolve_query_index_dir` will append the language component to this path.
-    /// Uses the default index root if `None`.
-    pub index_path: Option<PathBuf>,
+    /// Path to a local Tantivy index directory. When `None`, uses a release download
+    /// from the default index root.
+    pub index_dir: Option<PathBuf>,
     /// Target language code.
     pub lang: String,
     /// Maximum number of results to return.
@@ -31,18 +30,13 @@ pub struct QueryOptions {
     pub inverse: bool,
     /// Custom base path for dictionary lookup.
     pub dict_path: Option<PathBuf>,
-    /// Prefer `local/{lang}` over a release-downloaded index.
-    pub prefer_local_index: bool,
 }
 
 /// Queries a Tantivy index and prints matching documents.
 pub fn query_index(options: QueryOptions) -> Result<()> {
     util::validate_path_segment(&options.lang, "lang")?;
-    let index_dir = indexes::resolve_query_index_dir(
-        &options.lang,
-        options.index_path.as_deref(),
-        options.prefer_local_index,
-    )?;
+    let index_dir =
+        indexes::resolve_query_index_dir(&options.lang, options.index_dir.as_deref())?;
     let dir = MmapDirectory::open(&index_dir)
         .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;
     let index = Index::open(dir)

@@ -21,13 +21,6 @@ struct Cli {
 
     #[arg(long)]
     dict_path: Option<PathBuf>,
-
-    #[arg(long)]
-    index_path: Option<PathBuf>,
-
-    /// Use a locally built index under `local/{lang}` instead of a release download.
-    #[arg(long)]
-    prefer_local_index: bool,
 }
 
 #[derive(Subcommand)]
@@ -49,21 +42,24 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Query(cmd) => query_index(QueryOptions {
             query: cmd.query,
-            index_path: cli.index_path,
+            index_dir: cmd.index_dir,
             lang: cmd.lang,
             limit: cmd.limit,
             inverse: cmd.inverse,
             dict_path: cli.dict_path,
-            prefer_local_index: cli.prefer_local_index,
         }),
         Commands::Dict { command } => dict::run(command, cli.dict_path.as_deref()),
-        Commands::Index { command } => indexes::run(command, cli.index_path.as_deref()),
+        Commands::Index { command } => indexes::run(command),
     }
 }
 
 #[derive(Args)]
 struct QueryCommand {
     query: String,
+
+    /// Path to a local Tantivy index directory (from `packtrans-glossary-builder index --out`).
+    #[arg(long)]
+    index_dir: Option<PathBuf>,
 
     #[arg(long)]
     lang: String,

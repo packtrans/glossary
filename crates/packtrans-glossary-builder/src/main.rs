@@ -16,7 +16,7 @@ fn main() -> Result<()> {
         Commands::Index(cmd) => build_index(IndexOptions {
             scan_dir: cmd.scan_dir,
             lang: cmd.lang,
-            index_path: cli.index_path,
+            out: cmd.out,
             dict_path: cli.dict_path,
         }),
         Commands::CreateModList(cmd) => modlist::create_mod_list(cmd),

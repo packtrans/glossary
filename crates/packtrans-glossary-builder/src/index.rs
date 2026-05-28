@@ -2,9 +2,7 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 use packtrans_glossary_core::schema::build_schema;
-use packtrans_glossary_core::{
-    indexes_root, local_index_dir, text_component, tokenizer, util,
-};
+use packtrans_glossary_core::{text_component, tokenizer, util};
 use serde_json::Value;
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
@@ -14,8 +12,8 @@ pub struct IndexOptions {
     pub scan_dir: PathBuf,
     /// Target language code (used to locate tokenizer and output sub-directory).
     pub lang: String,
-    /// Custom path for the index output. Uses [`indexes_root`] if `None`.
-    pub index_path: Option<PathBuf>,
+    /// Path to the Tantivy index directory to create.
+    pub out: PathBuf,
     /// Custom base path for dictionary lookup.
     pub dict_path: Option<PathBuf>,
 }
@@ -25,10 +23,6 @@ pub struct IndexOptions {
 /// Each mod folder is expected to contain `en_us.json` and `{lang}.json`.
 pub fn build_index(options: IndexOptions) -> Result<()> {
     util::validate_path_segment(&options.lang, "lang")?;
-    let index_path = match options.index_path {
-        Some(path) => path,
-        None => indexes_root()?,
-    };
     if !options.scan_dir.is_dir() {
         bail!(
             "scan dir does not exist or is not a directory: {}",
@@ -36,7 +30,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
         );
     }
 
-    let index_dir = local_index_dir(&index_path, &options.lang)?;
+    let index_dir = &options.out;
 
     if let Ok(metadata) = index_dir.metadata() {
         if !metadata.is_dir() {
@@ -61,7 +55,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
             )
         })?;
     }
-    fs::create_dir_all(&index_dir).with_context(|| {
+    fs::create_dir_all(index_dir).with_context(|| {
         format!(
             "failed to create index db directory: {}",
             index_dir.display()
@@ -69,7 +63,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
     })?;
 
     let (schema, fields) = build_schema(&options.lang);
-    let dir = MmapDirectory::open(&index_dir)
+    let dir = MmapDirectory::open(index_dir)
         .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;
     let index = Index::create(dir, schema, IndexSettings::default())
         .with_context(|| format!("failed to create index: {}", index_dir.display()))?;

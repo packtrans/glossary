@@ -5,10 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
-use packtrans_glossary_core::{
-    downloaded_index_dir, downloaded_indexes_root, downloaded_meta_path, indexes_root,
-    local_index_dir,
-};
+use packtrans_glossary_core::{index_meta_path, indexes_root, release_index_dir};
 use packtrans_glossary_core::util;
 use serde_json::json;
 
@@ -75,10 +72,10 @@ struct ReleaseAsset {
     browser_download_url: String,
 }
 
-pub fn run(command: IndexCommand, base: Option<&Path>) -> Result<()> {
+pub fn run(command: IndexCommand) -> Result<()> {
     match command {
         IndexCommand::Download(cmd) => {
-            let entry = download_latest(&cmd.lang, base, false)?;
+            let entry = download_latest(&cmd.lang, None, false)?;
             println!(
                 "{}@{} -> {}",
                 entry.lang,
@@ -88,7 +85,7 @@ pub fn run(command: IndexCommand, base: Option<&Path>) -> Result<()> {
             Ok(())
         }
         IndexCommand::Upgrade(cmd) => {
-            let entry = download_latest(&cmd.lang, base, true)?;
+            let entry = download_latest(&cmd.lang, None, true)?;
             println!(
                 "{}@{} -> {}",
                 entry.lang,
@@ -97,45 +94,26 @@ pub fn run(command: IndexCommand, base: Option<&Path>) -> Result<()> {
             );
             Ok(())
         }
-        IndexCommand::Ls => list(base),
-        IndexCommand::Delete(cmd) => delete(cmd, base),
-        IndexCommand::Clean(cmd) => clean(cmd, base),
+        IndexCommand::Ls => list(None),
+        IndexCommand::Delete(cmd) => delete(cmd, None),
+        IndexCommand::Clean(cmd) => clean(cmd, None),
     }
 }
 
-pub fn resolve_query_index_dir(
-    lang: &str,
-    base: Option<&Path>,
-    prefer_local_index: bool,
-) -> Result<PathBuf> {
+pub fn resolve_query_index_dir(lang: &str, index_dir: Option<&Path>) -> Result<PathBuf> {
     util::validate_path_segment(lang, "lang")?;
-    let root = indexes_root_or(base)?;
-    let local_dir = local_index_dir(&root, lang)?;
-
-    if prefer_local_index && local_dir.is_dir() {
-        return Ok(local_dir);
+    if let Some(path) = index_dir {
+        if !path.is_dir() {
+            bail!("index directory does not exist: {}", path.display());
+        }
+        return Ok(path.to_path_buf());
     }
 
-    match resolve_downloaded_index_dir(lang, base, false) {
-        Ok(path) => {
-            if let Err(e) = clean_old_versions_from_meta(base) {
-                eprintln!("warning: failed to clean old versions: {}", e);
-            }
-            Ok(path)
-        }
-        Err(download_err) => {
-            if local_dir.is_dir() {
-                if !prefer_local_index {
-                    eprintln!(
-                        "warning: failed to use downloaded index ({download_err}); using local index at {}",
-                        local_dir.display()
-                    );
-                }
-                return Ok(local_dir);
-            }
-            Err(download_err).context("failed to resolve downloaded index and no local index exists")
-        }
+    let path = resolve_downloaded_index_dir(lang, None, false)?;
+    if let Err(e) = clean_old_versions_from_meta(None) {
+        eprintln!("warning: failed to clean old versions: {}", e);
     }
+    Ok(path)
 }
 
 fn resolve_downloaded_index_dir(
@@ -161,11 +139,11 @@ fn resolve_downloaded_index_dir(
         release.tag_name.as_str()
     } else {
         meta.current_version.as_deref().ok_or_else(|| {
-            anyhow!("no downloaded index version recorded in downloaded/meta.json")
+            anyhow!("no downloaded index version recorded in meta.json")
         })?
     };
 
-    let index_dir = downloaded_index_dir(&root, version, lang)?;
+    let index_dir = release_index_dir(&root, version, lang)?;
     if index_dir.is_dir() {
         if meta.current_version.as_deref() != Some(version) {
             meta.current_version = Some(version.to_string());
@@ -312,7 +290,7 @@ fn fetch_latest_release_inner() -> Result<Release> {
 fn ensure_release_index(lang: &str, base: Option<&Path>, release: &Release) -> Result<IndexEntry> {
     util::validate_path_segment(lang, "lang")?;
     let root = indexes_root_or(base)?;
-    let index_dir = downloaded_index_dir(&root, &release.tag_name, lang)?;
+    let index_dir = release_index_dir(&root, &release.tag_name, lang)?;
     if index_dir.is_dir() {
         return Ok(IndexEntry {
             lang: lang.to_string(),
@@ -335,8 +313,7 @@ fn install_asset(
     asset: &ReleaseAsset,
 ) -> Result<IndexEntry> {
     let root = indexes_root_or(base)?;
-    let downloaded_root = downloaded_indexes_root(&root);
-    let version_dir = downloaded_root.join(&release.tag_name);
+    let version_dir = root.join(&release.tag_name);
     fs::create_dir_all(&version_dir)
         .with_context(|| format!("failed to create {}", version_dir.display()))?;
 
@@ -435,7 +412,7 @@ fn install_asset(
 }
 
 pub fn list_downloaded_indexes(base: Option<&Path>) -> Result<Vec<IndexEntry>> {
-    let root = downloaded_indexes_root(&indexes_root_or(base)?);
+    let root = indexes_root_or(base)?;
     if !root.is_dir() {
         return Ok(vec![]);
     }
@@ -449,6 +426,9 @@ pub fn list_downloaded_indexes(base: Option<&Path>) -> Result<Vec<IndexEntry>> {
             continue;
         }
         let version = version_entry.file_name().to_string_lossy().into_owned();
+        if is_reserved_version_dir(&version) {
+            continue;
+        }
         for lang_entry in fs::read_dir(version_entry.path()).with_context(|| {
             format!(
                 "failed to read directory {}",
@@ -484,7 +464,7 @@ fn latest_installed_for_lang(lang: &str, base: Option<&Path>) -> Result<Option<I
 
 fn delete_downloaded_index(lang: &str, version: &str, base: Option<&Path>) -> Result<()> {
     let root = indexes_root_or(base)?;
-    let index_dir = downloaded_index_dir(&root, version, lang)?;
+    let index_dir = release_index_dir(&root, version, lang)?;
     if !index_dir.is_dir() {
         bail!("downloaded index not found: {}", index_dir.display());
     }
@@ -508,7 +488,7 @@ fn clean_old_versions_from_meta(base: Option<&Path>) -> Result<Vec<String>> {
 
 fn clean_old_versions_keep(base: Option<&Path>, keep_version: &str) -> Result<Vec<String>> {
     util::validate_path_segment(keep_version, "release tag")?;
-    let root = downloaded_indexes_root(&indexes_root_or(base)?);
+    let root = indexes_root_or(base)?;
     if !root.is_dir() {
         return Ok(vec![]);
     }
@@ -522,7 +502,7 @@ fn clean_old_versions_keep(base: Option<&Path>, keep_version: &str) -> Result<Ve
             continue;
         }
         let version = entry.file_name().to_string_lossy().into_owned();
-        if version == keep_version {
+        if is_reserved_version_dir(&version) || version == keep_version {
             continue;
         }
         fs::remove_dir_all(entry.path())
@@ -644,8 +624,12 @@ fn indexes_root_or(base: Option<&Path>) -> Result<PathBuf> {
     }
 }
 
+fn is_reserved_version_dir(name: &str) -> bool {
+    name.starts_with('.')
+}
+
 fn read_downloaded_meta(index_root: &Path) -> Result<DownloadedIndexMeta> {
-    let path = downloaded_meta_path(index_root);
+    let path = index_meta_path(index_root);
     if !path.is_file() {
         return Ok(DownloadedIndexMeta::default());
     }
@@ -670,7 +654,7 @@ fn read_downloaded_meta(index_root: &Path) -> Result<DownloadedIndexMeta> {
 }
 
 fn write_downloaded_meta(index_root: &Path, meta: &DownloadedIndexMeta) -> Result<()> {
-    let path = downloaded_meta_path(index_root);
+    let path = index_meta_path(index_root);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
@@ -773,8 +757,8 @@ mod tests {
     #[test]
     fn lists_downloaded_indexes_by_version_and_language() {
         let root = temp_root("list-indexes");
-        fs::create_dir_all(root.join("downloaded/index-20260525/zh_cn")).unwrap();
-        fs::create_dir_all(root.join("downloaded/index-20260526/ja_jp")).unwrap();
+        fs::create_dir_all(root.join("index-20260525/zh_cn")).unwrap();
+        fs::create_dir_all(root.join("index-20260526/ja_jp")).unwrap();
 
         let entries = list_downloaded_indexes(Some(&root)).unwrap();
         assert_eq!(
@@ -791,13 +775,13 @@ mod tests {
     #[test]
     fn cleans_versions_except_keep_version() {
         let root = temp_root("clean-indexes");
-        fs::create_dir_all(root.join("downloaded/index-20260525/zh_cn")).unwrap();
-        fs::create_dir_all(root.join("downloaded/index-20260526/zh_cn")).unwrap();
+        fs::create_dir_all(root.join("index-20260525/zh_cn")).unwrap();
+        fs::create_dir_all(root.join("index-20260526/zh_cn")).unwrap();
 
         let removed = clean_old_versions_keep(Some(&root), "index-20260526").unwrap();
         assert_eq!(removed, vec!["index-20260525"]);
-        assert!(!root.join("downloaded/index-20260525").exists());
-        assert!(root.join("downloaded/index-20260526/zh_cn").is_dir());
+        assert!(!root.join("index-20260525").exists());
+        assert!(root.join("index-20260526/zh_cn").is_dir());
 
         let _ = fs::remove_dir_all(&root);
     }
@@ -813,14 +797,13 @@ mod tests {
     }
 
     #[test]
-    fn prefers_local_index_when_flag_set() {
-        let root = temp_root("prefer-local");
-        fs::create_dir_all(local_index_dir(&root, "zh_cn").unwrap()).unwrap();
-        fs::create_dir_all(root.join("downloaded/index-20260526/zh_cn")).unwrap();
+    fn uses_explicit_index_dir_when_provided() {
+        let root = temp_root("explicit-index-dir");
+        let local_index = root.join("my-index");
+        fs::create_dir_all(&local_index).unwrap();
 
-        let resolved =
-            resolve_query_index_dir("zh_cn", Some(&root), true).unwrap();
-        assert_eq!(resolved, local_index_dir(&root, "zh_cn").unwrap());
+        let resolved = resolve_query_index_dir("zh_cn", Some(&local_index)).unwrap();
+        assert_eq!(resolved, local_index);
 
         let _ = fs::remove_dir_all(&root);
     }
