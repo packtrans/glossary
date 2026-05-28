@@ -474,6 +474,12 @@ fn delete_downloaded_index(lang: &str, version: &str, base: Option<&Path>) -> Re
     fs::remove_dir_all(&index_dir)
         .with_context(|| format!("failed to delete {}", index_dir.display()))?;
     remove_dir_if_empty(version_dir)?;
+
+    let mut meta = read_downloaded_meta(&root)?;
+    if meta.current_version.as_deref() == Some(version) && !version_dir_has_indexes(version_dir)? {
+        meta.current_version = latest_installed_version(base);
+        write_downloaded_meta(&root, &meta)?;
+    }
     Ok(())
 }
 
@@ -491,6 +497,9 @@ fn clean_old_versions_keep(base: Option<&Path>, keep_version: &str) -> Result<Ve
     let root = indexes_root_or(base)?;
     if !root.is_dir() {
         return Ok(vec![]);
+    }
+    if !root.join(keep_version).is_dir() {
+        bail!("keep version {keep_version} is not installed");
     }
 
     let mut removed = Vec::new();
@@ -612,6 +621,25 @@ fn indexes_root_or(base: Option<&Path>) -> Result<PathBuf> {
 
 fn is_reserved_version_dir(name: &str) -> bool {
     name.starts_with('.')
+}
+
+fn version_dir_has_indexes(version_dir: &Path) -> Result<bool> {
+    if !version_dir.is_dir() {
+        return Ok(false);
+    }
+    for entry in fs::read_dir(version_dir)
+        .with_context(|| format!("failed to read directory {}", version_dir.display()))?
+    {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.starts_with('.') {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn read_downloaded_meta(index_root: &Path) -> Result<DownloadedIndexMeta> {
@@ -757,6 +785,35 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![("index-20260525", "zh_cn"), ("index-20260526", "ja_jp")]
         );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn clean_rejects_missing_keep_version() {
+        let root = temp_root("clean-missing-keep");
+        fs::create_dir_all(root.join("index-20260525/zh_cn")).unwrap();
+
+        let err = clean_old_versions_keep(Some(&root), "index-20260599").unwrap_err();
+        assert!(err.to_string().contains("not installed"));
+        assert!(root.join("index-20260525/zh_cn").is_dir());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn delete_clears_meta_when_active_version_removed() {
+        let root = temp_root("delete-meta");
+        fs::create_dir_all(root.join("index-20260526/zh_cn")).unwrap();
+        fs::write(
+            index_meta_path(&root),
+            r#"{"current_version":"index-20260526"}"#,
+        )
+        .unwrap();
+
+        delete_downloaded_index("zh_cn", "index-20260526", Some(&root)).unwrap();
+        let meta = read_downloaded_meta(&root).unwrap();
+        assert!(meta.current_version.is_none());
 
         let _ = fs::remove_dir_all(&root);
     }
