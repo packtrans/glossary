@@ -20,6 +20,7 @@ This workspace provides two command-line utilities:
 - Generate mod lists from Modrinth or CurseForge APIs.
 - CJK tokenizer support via Lindera (Japanese ipadic, Korean ko-dic, Chinese jieba).
 - Manage downloadable Lindera dictionaries (`dict download`, `dict ls`, `dict delete`, `dict clean`).
+- Download and query release-managed glossary indexes from [packtrans/glossary-indexes](https://github.com/packtrans/glossary-indexes).
 
 ## Project Structure
 
@@ -53,19 +54,23 @@ The `modid` is derived from the direct child directory name under `<scan-dir>`.
 ### Building an Index
 
 ```bash
-packtrans-glossary-builder --index-path indexes index \
+packtrans-glossary-builder index \
   --scan-dir res \
-  --lang zh_cn
+  --lang zh_cn \
+  --out indexes
 ```
 
+Writes the Tantivy index to `indexes/zh_cn/` (`--out` is an index root; `--lang` is appended).
+
 **Options:**
-- `--scan-dir` and `--lang` are required. `--index-path` is optional and defaults to the system data directory when omitted.
-- `--dict-path` optionally overrides the dictionary storage location.
+- `--scan-dir`, `--lang`, and `--out` are required.
+- `--dict-path` optionally overrides the dictionary storage location (global builder flag).
 - Source language is always `en_us`.
 - Scans all direct child directories under `--scan-dir`; each is treated as one mod.
 - Skips mods with missing source or target language files (no error; summary reports total mods and mods with both language files).
 - Malformed language JSON is skipped with a warning; indexing still completes successfully.
 - Fails if the index already exists.
+- Never writes to the system data directory; use `--out` for the destination.
 
 ### Downloading Mod Language Files
 
@@ -101,15 +106,48 @@ packtrans-glossary-builder create-mod-list --platform curseforge --output mods.j
 ### Querying Translations
 
 ```bash
-packtrans-glossary --index-path indexes query --lang zh_cn "Cooking Pot" \
-  --limit 20
+# Release-managed index (downloads to the default data dir when needed)
+packtrans-glossary query --lang zh_cn "Cooking Pot" --limit 20
+
+# Local index built with the builder
+packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 20
 ```
 
 **Options:**
-- `--index-path`, `--lang`, and query text are required.
+- `--lang` and query text are required.
+- `--index-dir` is an index root; the index at `{index-dir}/{lang}` is used (same layout as `index --out`). When omitted, a release index is downloaded or opened from the default data directory.
 - `--limit` is optional; defaults to `20`.
 - `--inverse` searches target-language text and returns the source translation.
-- `--dict-path` optionally overrides the dictionary storage location.
+- `--dict-path` optionally overrides the dictionary storage location (global query flag).
+
+### Managing Release Indexes
+
+```bash
+# Download the latest release index for a language
+packtrans-glossary index download --lang zh_cn
+
+# Upgrade (download latest and remove older versions)
+packtrans-glossary index upgrade --lang zh_cn
+
+# List installed indexes
+packtrans-glossary index ls
+
+# Delete an index
+packtrans-glossary index delete --lang zh_cn
+
+# Remove old version directories
+packtrans-glossary index clean
+```
+
+Release indexes are stored under the default data directory:
+
+```text
+index-root/
+├── meta.json
+└── {version}/{lang}/
+```
+
+Version checks run at most once per 24 hours during query resolution.
 
 ### Managing Dictionaries
 
@@ -181,18 +219,20 @@ cargo run --bin packtrans-glossary-builder -- download \
 
 # Or use local files: place language JSON files under res/<modid>/
 
-# Build index
-cargo run --bin packtrans-glossary-builder -- --index-path indexes index \
-  --scan-dir res \
-  --lang zh_cn
+# Build a local index
+cargo run --bin packtrans-glossary-builder -- index \
+  --scan-dir res --lang zh_cn --out indexes
 
-# Query index
-cargo run --bin packtrans-glossary -- --index-path indexes query --lang zh_cn "Cooking Pot" \
-  --limit 10
+# Query the local index
+cargo run --bin packtrans-glossary -- query \
+  --index-dir indexes --lang zh_cn "Cooking Pot" --limit 10
+
+# Or query a release-managed index (no --index-dir)
+cargo run --bin packtrans-glossary -- query --lang zh_cn "Cooking Pot" --limit 10
 
 # Inverse query (search by target language)
-cargo run --bin packtrans-glossary -- --index-path indexes query --lang zh_cn "厨锅" \
-  --limit 10 --inverse
+cargo run --bin packtrans-glossary -- query \
+  --index-dir indexes --lang zh_cn "厨锅" --limit 10 --inverse
 ```
 
 ## Environment Variables

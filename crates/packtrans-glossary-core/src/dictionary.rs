@@ -42,15 +42,16 @@ fn dictionaries_root_or(base: Option<&Path>) -> Result<PathBuf> {
     }
 }
 
-/// Validates that `s` is a non-empty path segment without directory traversal.
-fn validate_segment(s: &str) -> Result<()> {
-    if s.is_empty() {
-        bail!("segment must not be empty");
-    }
-    if s.contains("..") || s.contains('/') || s.contains('\\') {
-        bail!("segment contains invalid path component: {}", s);
-    }
-    Ok(())
+/// Returns the expected dictionary directory for a dictionary name under the
+/// current `lindera` version (`lindera::get_version()`).
+///
+/// Validates `name` via [`crate::util::validate_path_segment`] and builds
+/// `dictionaries_root_or(base)?.join(version).join(name)`.
+pub fn dictionary_path(name: &str, base: Option<&Path>) -> Result<PathBuf> {
+    let version = lindera::get_version();
+    crate::util::validate_path_segment(name, "dictionary name")?;
+    crate::util::validate_path_segment(version, "dictionary version")?;
+    Ok(dictionaries_root_or(base)?.join(version).join(name))
 }
 
 /// Ensures a dictionary is available locally, downloading it if necessary.
@@ -58,10 +59,8 @@ fn validate_segment(s: &str) -> Result<()> {
 /// Returns the path to the dictionary directory.
 pub fn ensure_dictionary(name: &str, base: Option<&Path>) -> Result<PathBuf> {
     let version = lindera::get_version();
-    validate_segment(name)?;
-    validate_segment(version)?;
     let root = dictionaries_root_or(base)?;
-    let dict_dir = root.join(version).join(name);
+    let dict_dir = dictionary_path(name, base)?;
     if dict_dir.is_dir() {
         return Ok(dict_dir);
     }
@@ -161,8 +160,8 @@ pub fn list_dictionaries(base: Option<&Path>) -> Result<Vec<DictEntry>> {
 
 /// Deletes a dictionary by name and version.
 pub fn delete_dictionary(name: &str, version: &str, base: Option<&Path>) -> Result<()> {
-    validate_segment(name)?;
-    validate_segment(version)?;
+    crate::util::validate_path_segment(name, "dictionary name")?;
+    crate::util::validate_path_segment(version, "dictionary version")?;
     let dict_dir = dictionaries_root_or(base)?.join(version).join(name);
     if !dict_dir.is_dir() {
         bail!("dictionary not found: {}", dict_dir.display());

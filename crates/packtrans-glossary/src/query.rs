@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use packtrans_glossary_core::dictionary;
+use packtrans_glossary_core::schema::fields_from_schema;
+use packtrans_glossary_core::{tokenizer, util};
 use tantivy::{
     Index, TantivyDocument,
     collector::TopDocs,
@@ -9,16 +12,16 @@ use tantivy::{
     schema::{Field, Value},
 };
 
-use crate::index::{indexes_root, validate_lang};
-use crate::schema::fields_from_schema;
-use crate::tokenizer;
+use crate::indexes;
+use crate::progress;
 
 /// Options for querying a search index.
 pub struct QueryOptions {
     /// The search query string.
     pub query: String,
-    /// Custom path to the index. Uses [`indexes_root`] if `None`.
-    pub index_path: Option<PathBuf>,
+    /// Local index root directory; queries `{index_dir}/{lang}`.
+    /// When `None`, uses a release download from the default index root.
+    pub index_dir: Option<PathBuf>,
     /// Target language code.
     pub lang: String,
     /// Maximum number of results to return.
@@ -31,17 +34,15 @@ pub struct QueryOptions {
 
 /// Queries a Tantivy index and prints matching documents.
 pub fn query_index(options: QueryOptions) -> Result<()> {
-    validate_lang(&options.lang)?;
-    let index_path = match options.index_path {
-        Some(path) => path,
-        None => indexes_root()?,
-    };
-    let index_dir = index_path.join(&options.lang);
+    util::validate_path_segment(&options.lang, "lang")?;
+    let index_dir =
+        indexes::resolve_query_index_dir(&options.lang, options.index_dir.as_deref())?;
     let dir = MmapDirectory::open(&index_dir)
         .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;
     let index = Index::open(dir)
         .with_context(|| format!("failed to open index: {}", index_dir.display()))?;
 
+    ensure_tokenizer_dictionary(&options.lang, options.dict_path.as_deref())?;
     tokenizer::register_for_language(&index, &options.lang, options.dict_path.as_deref())?;
 
     let schema = index.schema();
@@ -58,13 +59,7 @@ pub fn query_index(options: QueryOptions) -> Result<()> {
     let parsed_query = query_parser.parse_query(&options.query)?;
     let top_docs = searcher.search(&parsed_query, &TopDocs::with_limit(options.limit))?;
 
-    // Column semantics follow the query direction, not fixed language roles:
-    //   source      = the language the query was written in (input)
-    //   source_lang = the language code of the *source* column
-    //   target      = the language the result is returned in (output)
-    //   target_lang = the language code of the *target* column
-    // The header is intentionally static so that downstream parsers don't
-    // have to branch on --inverse.
+    // Column semantics follow the query direction, not fixed language roles.
     let (out_src_field, out_tgt_field) = if options.inverse {
         (fields.target_text, fields.source_text)
     } else {
@@ -96,6 +91,23 @@ pub fn query_index(options: QueryOptions) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn ensure_tokenizer_dictionary(lang: &str, base: Option<&std::path::Path>) -> Result<()> {
+    let name = tokenizer::target_tokenizer_name(lang);
+    if name == "default" {
+        return Ok(());
+    }
+
+    let expected = dictionary::dictionary_path(name, base)?;
+    if expected.is_dir() {
+        return Ok(());
+    }
+
+    let pb = progress::spinner(format!("Downloading {name} dictionary"));
+    let result = dictionary::ensure_dictionary(name, base);
+    pb.finish_and_clear();
+    result.map(|_| ())
 }
 
 /// Retrieves the stored text value for a field from a document.

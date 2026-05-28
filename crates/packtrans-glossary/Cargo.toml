@@ -6,7 +6,11 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+indicatif = "0.17"
 packtrans-glossary-core = { path = "../packtrans-glossary-core" }
+serde_json.workspace = true
+tantivy.workspace = true
+ureq.workspace = true
 
 [[bin]]
 name = "packtrans-glossary"

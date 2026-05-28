@@ -8,6 +8,7 @@ anyhow.workspace = true
 clap.workspace = true
 packtrans-glossary-core = { path = "../packtrans-glossary-core" }
 serde_json.workspace = true
+tantivy.workspace = true
 ureq = { workspace = true, features = ["json"] }
 indicatif = "0.17"
 zip.workspace = true
