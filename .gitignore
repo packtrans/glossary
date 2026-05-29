@@ -1,3 +1,5 @@
 target
 indexes
 res
+web/node_modules
+web/dist

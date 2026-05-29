@@ -1,5 +1,7 @@
+pub mod archive;
 pub mod dictionary;
 mod index;
+pub mod query;
 pub mod schema;
 pub mod text_component;
 pub mod tokenizer;

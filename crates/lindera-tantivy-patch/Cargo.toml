@@ -1,0 +1,15 @@
+[package]
+name = "lindera-tantivy"
+version = "2.0.0"
+edition = "2021"
+license = "MIT"
+description = "Lindera tokenizer for Tantivy (patched: workspace tantivy without mmap for WASM)"
+
+[dependencies]
+lindera = { workspace = true }
+tantivy = { workspace = true }
+tantivy-tokenizer-api = "0.6"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+thiserror = "2"
+log = "0.4"

@@ -4,6 +4,26 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+#[cfg(target_arch = "wasm32")]
+mod mem;
+
+pub fn load_dictionary_from_zip(zip_bytes: &[u8]) -> Result<lindera::dictionary::Dictionary> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        return mem::load_dictionary_from_zip(zip_bytes);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let temp =
+            std::env::temp_dir().join(format!("packtrans-glossary-dict-{}", std::process::id()));
+        if temp.exists() {
+            fs::remove_dir_all(&temp)?;
+        }
+        crate::archive::materialize_dictionary_zip(zip_bytes, &temp)?;
+        lindera::dictionary::load_fs_dictionary(&temp).map_err(|e| anyhow::anyhow!("{e}"))
+    }
+}
+
 pub const IPADIC: &str = "lindera-ipadic";
 pub const KO_DIC: &str = "lindera-ko-dic";
 pub const JIEBA: &str = "lindera-jieba";
@@ -57,6 +77,7 @@ pub fn dictionary_path(name: &str, base: Option<&Path>) -> Result<PathBuf> {
 /// Ensures a dictionary is available locally, downloading it if necessary.
 ///
 /// Returns the path to the dictionary directory.
+#[cfg(feature = "native")]
 pub fn ensure_dictionary(name: &str, base: Option<&Path>) -> Result<PathBuf> {
     let version = lindera::get_version();
     let root = dictionaries_root_or(base)?;

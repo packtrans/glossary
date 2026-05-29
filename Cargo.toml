@@ -3,6 +3,8 @@ members = [
     "crates/packtrans-glossary-core",
     "crates/packtrans-glossary",
     "crates/packtrans-glossary-builder",
+    "crates/packtrans-glossary-wasm",
+    "crates/lindera-tantivy-patch",
 ]
 resolver = "3"
 
@@ -14,9 +16,16 @@ rust-version = "1.85"
 [workspace.dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-lindera = "2"
+lindera = { version = "2", default-features = false, features = ["compress"] }
+lindera-dictionary = { version = "2", default-features = false, features = ["compress"] }
 lindera-tantivy = "2"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tantivy = "0.25"
+tantivy = { version = "0.25", default-features = false, features = ["lz4-compression"] }
 ureq = "2"
-zip = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+uuid = { version = "1", features = ["js"] }
+rkyv = "0.8"
+
+[patch.crates-io]
+lindera-tantivy = { path = "crates/lindera-tantivy-patch" }

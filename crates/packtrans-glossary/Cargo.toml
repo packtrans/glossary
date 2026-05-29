@@ -7,7 +7,7 @@ edition.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 indicatif = "0.17"
-packtrans-glossary-core = { path = "../packtrans-glossary-core" }
+packtrans-glossary-core = { path = "../packtrans-glossary-core", features = ["native", "mmap"] }
 serde_json.workspace = true
 tantivy.workspace = true
 ureq.workspace = true

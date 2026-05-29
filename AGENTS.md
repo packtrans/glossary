@@ -2,11 +2,15 @@
 
 ## Project overview
 
-Rust CLI workspace for indexing/querying Minecraft mod translation glossaries. Three crates under `crates/`:
+Rust workspace for indexing/querying Minecraft mod translation glossaries. Crates under `crates/`:
 
-- `packtrans-glossary-core` — shared library (schema, tokenizers, download/zip utilities, index path helpers)
+- `packtrans-glossary-core` — shared library (schema, tokenizers, query, zip/archive helpers)
 - `packtrans-glossary` — query CLI with `query`, `dict`, and `index` subcommands
 - `packtrans-glossary-builder` — builder CLI with subcommands: `index`, `create-mod-list`, `download`
+- `packtrans-glossary-wasm` — `wasm-bindgen` bindings for browser query (used by `web/`)
+- `lindera-tantivy-patch` — patched `lindera-tantivy` (disables `tantivy/mmap` for WASM builds)
+
+Static web UI lives in `web/` (Vite + React + shadcn/ui). It loads indexes and Lindera dictionaries from `https://cdn.packtrans.download/glossary/{index|dict}/{version}/*.zip` using the same filenames as GitHub releases, then queries via WASM (no backend API).
 
 ## Toolchain requirement
 

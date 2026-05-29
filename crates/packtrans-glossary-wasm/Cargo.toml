@@ -1,0 +1,20 @@
+[package]
+name = "packtrans-glossary-wasm"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+packtrans-glossary-core = { path = "../packtrans-glossary-core", default-features = false }
+serde.workspace = true
+serde-wasm-bindgen = "0.6"
+tantivy.workspace = true
+wasm-bindgen = "0.2"
+getrandom = { version = "0.2", features = ["js"] }
+uuid.workspace = true
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz"]

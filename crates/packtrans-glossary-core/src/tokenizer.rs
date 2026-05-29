@@ -5,12 +5,6 @@ use tantivy::Index;
 
 use crate::dictionary;
 
-/// Returns the tokenizer name to use for a given target language code.
-///
-/// - `lzh`, `zh*` → [`dictionary::JIEBA`]
-/// - `ja*` → [`dictionary::IPADIC`]
-/// - `ko*` → [`dictionary::KO_DIC`]
-/// - otherwise → `"default"`
 pub fn target_tokenizer_name(target_language: &str) -> &'static str {
     if target_language == "lzh" || target_language.starts_with("zh") {
         dictionary::JIEBA
@@ -23,27 +17,58 @@ pub fn target_tokenizer_name(target_language: &str) -> &'static str {
     }
 }
 
-/// Registers the appropriate tokenizer for `target_language` into the given index.
 pub fn register_for_language(
     index: &Index,
     target_language: &str,
     base: Option<&Path>,
 ) -> Result<()> {
-    let name = target_tokenizer_name(target_language);
-    register_by_name(index, name, base)
+    register_for_language_with_dict_zip(index, target_language, None, base)
 }
 
-/// Registers a named tokenizer by loading its dictionary from disk.
-fn register_by_name(index: &Index, name: &str, base: Option<&Path>) -> Result<()> {
+pub fn register_for_language_with_dict_zip(
+    index: &Index,
+    target_language: &str,
+    dict_zip: Option<&[u8]>,
+    base: Option<&Path>,
+) -> Result<()> {
+    register_by_name(
+        index,
+        target_tokenizer_name(target_language),
+        dict_zip,
+        base,
+    )
+}
+
+fn register_by_name(
+    index: &Index,
+    name: &str,
+    dict_zip: Option<&[u8]>,
+    base: Option<&Path>,
+) -> Result<()> {
     if name == "default" {
         return Ok(());
     }
     if !dictionary::DICTIONARY_NAMES.contains(&name) {
-        bail!("unknown tokenizer: {}", name);
+        bail!("unknown tokenizer: {name}");
     }
-    let dict_path = dictionary::ensure_dictionary(name, base)?;
-    let dict = lindera::dictionary::load_fs_dictionary(&dict_path)
-        .with_context(|| format!("failed to load {} dictionary", name))?;
+
+    let dict = if let Some(zip_bytes) = dict_zip {
+        dictionary::load_dictionary_from_zip(zip_bytes)
+            .with_context(|| format!("failed to load {name} dictionary from zip"))?
+    } else {
+        #[cfg(feature = "native")]
+        {
+            let dict_path = dictionary::ensure_dictionary(name, base)?;
+            lindera::dictionary::load_fs_dictionary(&dict_path)
+                .with_context(|| format!("failed to load {name} dictionary"))?
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = base;
+            bail!("dictionary zip bytes are required for tokenizer {name}");
+        }
+    };
+
     let segmenter = lindera::segmenter::Segmenter::new(lindera::mode::Mode::Normal, dict, None);
     let tokenizer = lindera_tantivy::tokenizer::LinderaTokenizer::from_segmenter(segmenter);
     index.tokenizers().register(name, tokenizer);
