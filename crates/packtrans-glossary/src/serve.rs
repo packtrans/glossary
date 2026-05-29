@@ -4,6 +4,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result, bail};
 use axum::{
     Json, Router,
+    extract::rejection::QueryRejection,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -90,8 +91,13 @@ pub async fn run(cmd: ServeCommand, dict_path: Option<PathBuf>) -> Result<()> {
 
 async fn query_handler(
     State(state): State<Arc<AppState>>,
-    Query(params): Query<HttpQueryParams>,
+    params: Result<Query<HttpQueryParams>, QueryRejection>,
 ) -> Response {
+    let Query(params) = match params {
+        Ok(query) => query,
+        Err(rejection) => return ApiError::bad_request(rejection.to_string()).into_response(),
+    };
+
     match handle_query(state, params).await {
         Ok(hits) => Json(hits).into_response(),
         Err(err) => err.into_response(),
@@ -125,13 +131,13 @@ async fn handle_query(
 
     tokio::task::spawn_blocking(move || search_index(options))
         .await
-        .map_err(|e| ApiError::internal(anyhow::anyhow!("search task panicked: {e}")))?
-        .map_err(ApiError::internal)
+        .map_err(|e| ApiError::internal_logged(anyhow::anyhow!("search task panicked: {e}")))?
+        .map_err(ApiError::internal_logged)
 }
 
 enum ApiError {
     BadRequest(String),
-    Internal(anyhow::Error),
+    Internal,
 }
 
 impl ApiError {
@@ -139,8 +145,9 @@ impl ApiError {
         Self::BadRequest(message.into())
     }
 
-    fn internal(err: anyhow::Error) -> Self {
-        Self::Internal(err)
+    fn internal_logged(err: anyhow::Error) -> Self {
+        eprintln!("internal error: {err:?}");
+        Self::Internal
     }
 }
 
@@ -148,7 +155,10 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message),
-            Self::Internal(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+            Self::Internal => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal server error".to_string(),
+            ),
         };
         (status, Json(ErrorBody { error: message })).into_response()
     }

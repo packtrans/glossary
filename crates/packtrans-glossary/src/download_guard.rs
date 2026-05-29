@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 use anyhow::Result;
 
 /// Serializes in-flight downloads for the HTTP server.
 pub struct DownloadCoordinator {
-    locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    locks: Mutex<HashMap<String, Weak<Mutex<()>>>>,
 }
 
 impl DownloadCoordinator {
@@ -21,15 +21,27 @@ impl DownloadCoordinator {
                 .locks
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            table
-                .entry(key.to_owned())
-                .or_insert_with(|| Arc::new(Mutex::new(())))
-                .clone()
+            if let Some(weak) = table.get(key) {
+                if let Some(lock) = weak.upgrade() {
+                    lock
+                } else {
+                    table.remove(key);
+                    Self::insert_lock(&mut table, key)
+                }
+            } else {
+                Self::insert_lock(&mut table, key)
+            }
         };
         let _guard = lock
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         f()
+    }
+
+    fn insert_lock(table: &mut HashMap<String, Weak<Mutex<()>>>, key: &str) -> Arc<Mutex<()>> {
+        let lock = Arc::new(Mutex::new(()));
+        table.insert(key.to_owned(), Arc::downgrade(&lock));
+        lock
     }
 }
 
