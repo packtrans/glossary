@@ -1,0 +1,15 @@
+{
+  "name": "packtrans-glossary-wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "packtrans_glossary_wasm_bg.wasm",
+    "packtrans_glossary_wasm.js",
+    "packtrans_glossary_wasm.d.ts"
+  ],
+  "main": "packtrans_glossary_wasm.js",
+  "types": "packtrans_glossary_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
