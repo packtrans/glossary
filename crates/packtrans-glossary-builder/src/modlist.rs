@@ -120,7 +120,7 @@ fn fetch_curseforge_mod_list(output: &PathBuf, count: usize) -> Result<()> {
 
         let mods_len_before = mods.len();
         let url = format!(
-            "https://api.curseforge.com/v1/mods/search?gameId=432&sortField=6&sortOrder=desc&pageSize={}&index={}",
+            "https://api.curseforge.com/v1/mods/search?gameId=432&classId=6&sortField=6&sortOrder=desc&pageSize={}&index={}",
             CURSEFORGE_PAGE_SIZE, offset
         );
 
