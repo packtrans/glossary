@@ -130,6 +130,7 @@ async fn handle_query(
         inverse: params.inverse,
         dict_path: state.dict_path.clone(),
         download_guard: Some(Arc::clone(&state.download_guard)),
+        json: false,
     };
 
     tokio::task::spawn_blocking(move || search_index(options))

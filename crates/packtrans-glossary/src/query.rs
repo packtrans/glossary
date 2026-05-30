@@ -35,6 +35,8 @@ pub struct QueryOptions {
     pub dict_path: Option<PathBuf>,
     /// When set (HTTP server), serializes concurrent downloads for the same resource.
     pub download_guard: Option<Arc<DownloadCoordinator>>,
+    /// If `true`, print results as a JSON array instead of TSV.
+    pub json: bool,
 }
 
 /// A single glossary search hit.
@@ -51,19 +53,24 @@ pub struct QueryHit {
 
 /// Queries a Tantivy index and prints matching documents.
 pub fn query_index(options: QueryOptions) -> Result<()> {
+    let json = options.json;
     let hits = search_index(options)?;
-    println!("confidence\tmod_id\tkey\tsource\tsource_lang\ttarget_lang\ttarget");
-    for hit in hits {
-        println!(
-            "{:.2}\t{}\t{}\t{}\t{}\t{}\t{}",
-            hit.confidence,
-            hit.mod_id,
-            hit.key,
-            hit.source,
-            hit.source_lang,
-            hit.target_lang,
-            hit.target
-        );
+    if json {
+        println!("{}", serde_json::to_string(&hits)?);
+    } else {
+        println!("confidence\tmod_id\tkey\tsource\tsource_lang\ttarget_lang\ttarget");
+        for hit in hits {
+            println!(
+                "{:.2}\t{}\t{}\t{}\t{}\t{}\t{}",
+                hit.confidence,
+                hit.mod_id,
+                hit.key,
+                hit.source,
+                hit.source_lang,
+                hit.target_lang,
+                hit.target
+            );
+        }
     }
     Ok(())
 }

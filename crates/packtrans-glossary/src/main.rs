@@ -52,6 +52,7 @@ fn main() -> Result<()> {
             inverse: cmd.inverse,
             dict_path: cli.dict_path,
             download_guard: None,
+            json: cmd.json,
         }),
         Commands::Serve(cmd) => {
             let rt = tokio::runtime::Runtime::new().context("failed to start async runtime")?;
@@ -78,4 +79,8 @@ struct QueryCommand {
 
     #[arg(long)]
     inverse: bool,
+
+    /// Print results as JSON (same shape as the `serve` HTTP API).
+    #[arg(long)]
+    json: bool,
 }
