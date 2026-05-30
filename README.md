@@ -21,6 +21,7 @@ This workspace provides two command-line utilities:
 - CJK tokenizer support via Lindera (Japanese ipadic, Korean ko-dic, Chinese jieba).
 - Manage downloadable Lindera dictionaries (`dict download`, `dict ls`, `dict delete`, `dict clean`).
 - Download and query release-managed glossary indexes from [packtrans/glossary-indexes](https://github.com/packtrans/glossary-indexes).
+- HTTP API via `serve` for programmatic queries (JSON responses).
 
 ## Project Structure
 
@@ -118,6 +119,41 @@ packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 
 - `--index-dir` is an index root; the index at `{index-dir}/{lang}` is used (same layout as `index --out`). When omitted, a release index is downloaded or opened from the default data directory.
 - `--limit` is optional; defaults to `20`.
 - `--inverse` searches target-language text and returns the source translation.
+- `--dict-path` optionally overrides the dictionary storage location (global query flag).
+
+### HTTP Server
+
+Start an HTTP server that exposes glossary search as JSON:
+
+```bash
+# Default: bind 127.0.0.1:8080, use release-managed indexes
+packtrans-glossary serve
+
+# Custom host/port and local index root
+packtrans-glossary serve --host 0.0.0.0 --port 3000 --index-dir indexes
+```
+
+**Endpoint:** `GET /query`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `lang` | yes | — | Target language code (e.g. `zh_cn`) |
+| `q` or `query` | yes | — | Search text |
+| `limit` | no | `10` | Maximum results (max `50`) |
+| `inverse` | no | `false` | Search target text, return source |
+
+Example:
+
+```bash
+curl 'http://127.0.0.1:8080/query?lang=zh_cn&q=Cooking+Pot&limit=20&inverse=false'
+```
+
+Returns a JSON array of hits with `confidence`, `mod_id`, `key`, `source`, `source_lang`, `target_lang`, and `target`. Errors return `{ "error": "..." }` with HTTP 400 (bad request) or 500 (internal error).
+
+**Options:**
+- `--host` defaults to `127.0.0.1`.
+- `--port` defaults to `8080`.
+- `--index-dir` is an index root (same layout as `query --index-dir`). When omitted, release indexes are used from the default data directory.
 - `--dict-path` optionally overrides the dictionary storage location (global query flag).
 
 ### Managing Release Indexes
@@ -233,6 +269,10 @@ cargo run --bin packtrans-glossary -- query --lang zh_cn "Cooking Pot" --limit 1
 # Inverse query (search by target language)
 cargo run --bin packtrans-glossary -- query \
   --index-dir indexes --lang zh_cn "厨锅" --limit 10 --inverse
+
+# HTTP server (then query via curl)
+cargo run --bin packtrans-glossary -- serve --index-dir indexes
+# curl 'http://127.0.0.1:8080/query?lang=zh_cn&q=Cooking+Pot&limit=10'
 ```
 
 ## Environment Variables
@@ -244,7 +284,7 @@ cargo run --bin packtrans-glossary -- query \
 ## Future Enhancements
 
 - `--force` flag to rebuild existing indexes
-- JSON output mode
+- JSON output mode for the `query` CLI subcommand
 - Fuzzy match
 - Batch indexing of multiple target languages
 
