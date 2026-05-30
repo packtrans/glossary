@@ -1,16 +1,19 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 
 mod dict;
+mod download_guard;
 mod indexes;
 mod progress;
 mod query;
+mod serve;
 
 use dict::DictCommand;
 use indexes::IndexCommand;
 use query::{QueryOptions, query_index};
+use serve::ServeCommand;
 
 #[derive(Parser)]
 #[command(name = "packtrans-glossary")]
@@ -26,6 +29,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Query(QueryCommand),
+    Serve(ServeCommand),
     Dict {
         #[command(subcommand)]
         command: DictCommand,
@@ -47,7 +51,12 @@ fn main() -> Result<()> {
             limit: cmd.limit,
             inverse: cmd.inverse,
             dict_path: cli.dict_path,
+            download_guard: None,
         }),
+        Commands::Serve(cmd) => {
+            let rt = tokio::runtime::Runtime::new().context("failed to start async runtime")?;
+            rt.block_on(serve::run(cmd, cli.dict_path))
+        }
         Commands::Dict { command } => dict::run(command, cli.dict_path.as_deref()),
         Commands::Index { command } => indexes::run(command),
     }

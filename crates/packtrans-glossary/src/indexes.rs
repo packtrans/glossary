@@ -1,14 +1,16 @@
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
-use packtrans_glossary_core::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
 use packtrans_glossary_core::util;
+use packtrans_glossary_core::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
 use serde_json::json;
 
+use crate::download_guard::{DownloadCoordinator, with_download_lock};
 use crate::progress;
 
 const GLOSSARY_INDEXES_LATEST_RELEASE_URL: &str =
@@ -100,7 +102,11 @@ pub fn run(command: IndexCommand) -> Result<()> {
     }
 }
 
-pub fn resolve_query_index_dir(lang: &str, index_dir: Option<&Path>) -> Result<PathBuf> {
+pub fn resolve_query_index_dir(
+    lang: &str,
+    index_dir: Option<&Path>,
+    download_guard: Option<&DownloadCoordinator>,
+) -> Result<PathBuf> {
     util::validate_path_segment(lang, "lang")?;
     if let Some(base) = index_dir {
         let path = lang_index_dir(base, lang)?;
@@ -110,7 +116,7 @@ pub fn resolve_query_index_dir(lang: &str, index_dir: Option<&Path>) -> Result<P
         return Ok(path);
     }
 
-    let path = resolve_downloaded_index_dir(lang, None, false)?;
+    let path = resolve_downloaded_index_dir(lang, None, false, download_guard)?;
     if let Err(e) = clean_old_versions_from_meta(None) {
         eprintln!("warning: failed to clean old versions: {}", e);
     }
@@ -121,15 +127,29 @@ fn resolve_downloaded_index_dir(
     lang: &str,
     base: Option<&Path>,
     force_version_check: bool,
+    download_guard: Option<&DownloadCoordinator>,
 ) -> Result<PathBuf> {
     let root = indexes_root_or(base)?;
-    let mut meta = read_downloaded_meta(&root)?;
+    let meta_key = format!("meta:{}", root.display());
+    with_download_lock(download_guard, &meta_key, || {
+        resolve_downloaded_index_dir_inner(lang, base, force_version_check, download_guard, &root)
+    })
+}
+
+fn resolve_downloaded_index_dir_inner(
+    lang: &str,
+    base: Option<&Path>,
+    force_version_check: bool,
+    download_guard: Option<&DownloadCoordinator>,
+    root: &Path,
+) -> Result<PathBuf> {
+    let mut meta = read_downloaded_meta(root)?;
     let now = unix_now();
 
     let checked_release = if force_version_check || should_check_latest_version(&meta, now) {
-        let release = fetch_latest_release()?;
+        let release = fetch_latest_release(download_guard)?;
         meta.latest_version_check_time = Some(now);
-        write_downloaded_meta(&root, &meta)?;
+        write_downloaded_meta(root, &meta)?;
         Some(release)
     } else {
         None
@@ -138,42 +158,42 @@ fn resolve_downloaded_index_dir(
     let version = if let Some(release) = &checked_release {
         release.tag_name.as_str()
     } else {
-        meta.current_version.as_deref().ok_or_else(|| {
-            anyhow!("no downloaded index version recorded in meta.json")
-        })?
+        meta.current_version
+            .as_deref()
+            .ok_or_else(|| anyhow!("no downloaded index version recorded in meta.json"))?
     };
 
-    let index_dir = release_index_dir(&root, version, lang)?;
+    let index_dir = release_index_dir(root, version, lang)?;
     if index_dir.is_dir() {
         if meta.current_version.as_deref() != Some(version) {
             meta.current_version = Some(version.to_string());
-            write_downloaded_meta(&root, &meta)?;
+            write_downloaded_meta(root, &meta)?;
         }
         return Ok(index_dir);
     }
 
     let release = match checked_release {
         Some(release) => release,
-        None => fetch_latest_release()?,
+        None => fetch_latest_release(download_guard)?,
     };
 
-    let entry = ensure_release_index(lang, base, &release)?;
+    let entry = ensure_release_index(lang, base, &release, download_guard)?;
     meta.current_version = Some(release.tag_name.clone());
     meta.current_version_downloaded_time = Some(now);
     meta.latest_version_check_time = Some(now);
-    write_downloaded_meta(&root, &meta)?;
+    write_downloaded_meta(root, &meta)?;
     Ok(entry.path)
 }
 
 fn download_latest(lang: &str, base: Option<&Path>, clean_old: bool) -> Result<IndexEntry> {
-    let release = fetch_latest_release()?;
+    let release = fetch_latest_release(None)?;
     let root = indexes_root_or(base)?;
     let now = unix_now();
     let mut meta = read_downloaded_meta(&root)?;
     meta.latest_version_check_time = Some(now);
     write_downloaded_meta(&root, &meta)?;
 
-    let entry = ensure_release_index(lang, base, &release)?;
+    let entry = ensure_release_index(lang, base, &release, None)?;
     meta.current_version = Some(release.tag_name.clone());
     meta.current_version_downloaded_time = Some(now);
     meta.latest_version_check_time = Some(now);
@@ -235,11 +255,13 @@ fn clean(cmd: IndexCleanCommand, base: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
-fn fetch_latest_release() -> Result<Release> {
-    let pb = progress::spinner("Checking latest glossary index release");
-    let result = fetch_latest_release_inner();
-    pb.finish_and_clear();
-    result
+fn fetch_latest_release(download_guard: Option<&DownloadCoordinator>) -> Result<Release> {
+    with_download_lock(download_guard, "index-release:latest", || {
+        let pb = progress::spinner("Checking latest glossary index release");
+        let result = fetch_latest_release_inner();
+        pb.finish_and_clear();
+        result
+    })
 }
 
 fn fetch_latest_release_inner() -> Result<Release> {
@@ -287,7 +309,12 @@ fn fetch_latest_release_inner() -> Result<Release> {
     Ok(Release { tag_name, assets })
 }
 
-fn ensure_release_index(lang: &str, base: Option<&Path>, release: &Release) -> Result<IndexEntry> {
+fn ensure_release_index(
+    lang: &str,
+    base: Option<&Path>,
+    release: &Release,
+    download_guard: Option<&DownloadCoordinator>,
+) -> Result<IndexEntry> {
     util::validate_path_segment(lang, "lang")?;
     let root = indexes_root_or(base)?;
     let index_dir = release_index_dir(&root, &release.tag_name, lang)?;
@@ -299,11 +326,23 @@ fn ensure_release_index(lang: &str, base: Option<&Path>, release: &Release) -> R
         });
     }
 
-    let asset = select_asset(release, lang)?;
-    let pb = progress::spinner(format!("Downloading {lang} index {}", release.tag_name));
-    let result = install_asset(lang, base, release, asset);
-    pb.finish_and_clear();
-    result
+    let lock_key = format!("index:{}:{}:{}", root.display(), release.tag_name, lang);
+    with_download_lock(download_guard, &lock_key, || {
+        let index_dir = release_index_dir(&root, &release.tag_name, lang)?;
+        if index_dir.is_dir() {
+            return Ok(IndexEntry {
+                lang: lang.to_string(),
+                version: release.tag_name.clone(),
+                path: index_dir,
+            });
+        }
+
+        let asset = select_asset(release, lang)?;
+        let pb = progress::spinner(format!("Downloading {lang} index {}", release.tag_name));
+        let result = install_asset(lang, base, release, asset);
+        pb.finish_and_clear();
+        result
+    })
 }
 
 fn install_asset(
@@ -601,7 +640,7 @@ fn resolve_keep_version_for_clean(base: Option<&Path>) -> Result<String> {
     if let Some(version) = latest_installed_version(base) {
         return Ok(version);
     }
-    Ok(fetch_latest_release()?.tag_name)
+    Ok(fetch_latest_release(None)?.tag_name)
 }
 
 fn latest_installed_version(base: Option<&Path>) -> Option<String> {
@@ -648,10 +687,9 @@ fn read_downloaded_meta(index_root: &Path) -> Result<DownloadedIndexMeta> {
         return Ok(DownloadedIndexMeta::default());
     }
 
-    let bytes = fs::read(&path)
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    let value: serde_json::Value =
-        serde_json::from_slice(&bytes).with_context(|| format!("failed to parse {}", path.display()))?;
+    let bytes = fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
 
     Ok(DownloadedIndexMeta {
         latest_version_check_time: value
@@ -667,6 +705,8 @@ fn read_downloaded_meta(index_root: &Path) -> Result<DownloadedIndexMeta> {
     })
 }
 
+static META_WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
 fn write_downloaded_meta(index_root: &Path, meta: &DownloadedIndexMeta) -> Result<()> {
     let path = index_meta_path(index_root);
     if let Some(parent) = path.parent() {
@@ -680,16 +720,28 @@ fn write_downloaded_meta(index_root: &Path, meta: &DownloadedIndexMeta) -> Resul
         "current_version_downloaded_time": meta.current_version_downloaded_time,
     });
     let bytes = serde_json::to_vec_pretty(&value)?;
-    let temp_path = path.with_extension("json.tmp");
+    let write_id = META_WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let temp_path = path.with_file_name(format!(
+        "{}.{}.{}.tmp",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("meta.json"),
+        std::process::id(),
+        write_id
+    ));
     fs::write(&temp_path, &bytes)
         .with_context(|| format!("failed to write {}", temp_path.display()))?;
-    fs::rename(&temp_path, &path).with_context(|| {
+    let rename_result = fs::rename(&temp_path, &path).with_context(|| {
         format!(
             "failed to move {} to {}",
             temp_path.display(),
             path.display()
         )
-    })?;
+    });
+    if rename_result.is_err() && temp_path.exists() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    rename_result?;
     Ok(())
 }
 
@@ -741,7 +793,11 @@ fn agent_builder() -> ureq::AgentBuilder {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
     use super::*;
+    use crate::download_guard::DownloadCoordinator;
 
     fn temp_root(name: &str) -> PathBuf {
         let root =
@@ -839,8 +895,14 @@ mod tests {
             current_version: Some("index-20260526".to_string()),
             ..Default::default()
         };
-        assert!(!should_check_latest_version(&meta, 1_000 + VERSION_CHECK_INTERVAL.as_secs() - 1));
-        assert!(should_check_latest_version(&meta, 1_000 + VERSION_CHECK_INTERVAL.as_secs()));
+        assert!(!should_check_latest_version(
+            &meta,
+            1_000 + VERSION_CHECK_INTERVAL.as_secs() - 1
+        ));
+        assert!(should_check_latest_version(
+            &meta,
+            1_000 + VERSION_CHECK_INTERVAL.as_secs()
+        ));
 
         let no_version = DownloadedIndexMeta {
             latest_version_check_time: Some(1_000),
@@ -853,13 +915,66 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_meta_writes_succeed() {
+        let root = temp_root("concurrent-meta-write");
+        let barrier = Arc::new(Barrier::new(8));
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let barrier = Arc::clone(&barrier);
+            let root = root.clone();
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                let mut meta = read_downloaded_meta(&root).unwrap();
+                meta.latest_version_check_time = Some(i);
+                write_downloaded_meta(&root, &meta).unwrap();
+            }));
+        }
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert!(index_meta_path(&root).is_file());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn concurrent_meta_writes_with_download_coordinator_succeed() {
+        let root = temp_root("concurrent-meta-coordinator");
+        let coordinator = Arc::new(DownloadCoordinator::new());
+        let meta_key = format!("meta:{}", root.display());
+        let barrier = Arc::new(Barrier::new(8));
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let barrier = Arc::clone(&barrier);
+            let coordinator = Arc::clone(&coordinator);
+            let root = root.clone();
+            let meta_key = meta_key.clone();
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                with_download_lock(Some(coordinator.as_ref()), &meta_key, || {
+                    let mut meta = read_downloaded_meta(&root)?;
+                    meta.latest_version_check_time = Some(i);
+                    write_downloaded_meta(&root, &meta)
+                })
+                .unwrap();
+            }));
+        }
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert!(index_meta_path(&root).is_file());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn uses_explicit_index_dir_when_provided() {
         let root = temp_root("explicit-index-dir");
         let index_root = root.join("indexes");
         let local_index = index_root.join("zh_cn");
         fs::create_dir_all(&local_index).unwrap();
 
-        let resolved = resolve_query_index_dir("zh_cn", Some(&index_root)).unwrap();
+        let resolved = resolve_query_index_dir("zh_cn", Some(&index_root), None).unwrap();
         assert_eq!(resolved, local_index);
 
         let _ = fs::remove_dir_all(&root);
