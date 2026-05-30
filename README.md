@@ -123,6 +123,8 @@ packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 
 
 ### HTTP Server
 
+> **Experimental — local use only.** The `serve` command is intended for ad-hoc queries on your own machine (default bind `127.0.0.1`). It is not designed for production use or a large number of parallel requests. For heavy or concurrent workloads, use the `query` CLI instead.
+
 Start an HTTP server that exposes glossary search as JSON:
 
 ```bash

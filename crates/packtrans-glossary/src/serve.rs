@@ -83,6 +83,9 @@ pub async fn run(cmd: ServeCommand, dict_path: Option<PathBuf>) -> Result<()> {
         .await
         .with_context(|| format!("failed to bind to {bind_addr}"))?;
     eprintln!("listening on http://{bind_addr}");
+    eprintln!(
+        "note: serve is experimental and for local use only; it is not intended for production or many parallel requests"
+    );
     axum::serve(listener, app)
         .await
         .context("HTTP server exited with an error")?;
