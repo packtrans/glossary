@@ -101,7 +101,7 @@ impl GlossaryIndex {
     }
 
     fn search(&self, query: &str, limit: usize, inverse: bool) -> Result<Vec<QueryHit>> {
-        if query.is_empty() {
+        if query.trim().is_empty() {
             bail!("query must not be empty");
         }
         if limit == 0 {
@@ -146,14 +146,26 @@ impl GlossaryIndex {
         let mut hits = Vec::with_capacity(top_docs.len());
         for (score, address) in top_docs {
             let doc: TantivyDocument = searcher.doc(address)?;
+            let mod_id = stored_text(&doc, self.fields.mod_id);
+            let key = stored_text(&doc, self.fields.key);
+            let source = stored_text(&doc, out_src_field);
+            let source_lang = stored_text(&doc, out_src_lang_field);
+            let target_lang = stored_text(&doc, out_tgt_lang_field);
+            let target = stored_text(&doc, out_tgt_field);
+
+            if mod_id.is_empty() || key.is_empty() || source.is_empty()
+                || source_lang.is_empty() || target_lang.is_empty() || target.is_empty() {
+                continue;
+            }
+
             hits.push(QueryHit {
                 confidence: score,
-                mod_id: stored_text(&doc, self.fields.mod_id).to_owned(),
-                key: stored_text(&doc, self.fields.key).to_owned(),
-                source: stored_text(&doc, out_src_field).to_owned(),
-                source_lang: stored_text(&doc, out_src_lang_field).to_owned(),
-                target_lang: stored_text(&doc, out_tgt_lang_field).to_owned(),
-                target: stored_text(&doc, out_tgt_field).to_owned(),
+                mod_id: mod_id.to_owned(),
+                key: key.to_owned(),
+                source: source.to_owned(),
+                source_lang: source_lang.to_owned(),
+                target_lang: target_lang.to_owned(),
+                target: target.to_owned(),
             });
         }
 
