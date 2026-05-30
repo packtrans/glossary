@@ -35,8 +35,6 @@ pub struct QueryOptions {
     pub dict_path: Option<PathBuf>,
     /// When set (HTTP server), serializes concurrent downloads for the same resource.
     pub download_guard: Option<Arc<DownloadCoordinator>>,
-    /// If `true`, print results as a JSON array instead of TSV.
-    pub json: bool,
 }
 
 /// A single glossary search hit.
@@ -52,8 +50,7 @@ pub struct QueryHit {
 }
 
 /// Queries a Tantivy index and prints matching documents.
-pub fn query_index(options: QueryOptions) -> Result<()> {
-    let json = options.json;
+pub fn query_index(options: QueryOptions, json: bool) -> Result<()> {
     let hits = search_index(options)?;
     if json {
         println!("{}", serde_json::to_string(&hits)?);

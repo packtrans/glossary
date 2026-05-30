@@ -44,16 +44,18 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Query(cmd) => query_index(QueryOptions {
-            query: cmd.query,
-            index_dir: cmd.index_dir,
-            lang: cmd.lang,
-            limit: cmd.limit,
-            inverse: cmd.inverse,
-            dict_path: cli.dict_path,
-            download_guard: None,
-            json: cmd.json,
-        }),
+        Commands::Query(cmd) => query_index(
+            QueryOptions {
+                query: cmd.query,
+                index_dir: cmd.index_dir,
+                lang: cmd.lang,
+                limit: cmd.limit,
+                inverse: cmd.inverse,
+                dict_path: cli.dict_path,
+                download_guard: None,
+            },
+            cmd.json,
+        ),
         Commands::Serve(cmd) => {
             let rt = tokio::runtime::Runtime::new().context("failed to start async runtime")?;
             rt.block_on(serve::run(cmd, cli.dict_path))
