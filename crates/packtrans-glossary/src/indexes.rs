@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -129,13 +130,26 @@ fn resolve_downloaded_index_dir(
     download_guard: Option<&DownloadCoordinator>,
 ) -> Result<PathBuf> {
     let root = indexes_root_or(base)?;
-    let mut meta = read_downloaded_meta(&root)?;
+    let meta_key = format!("meta:{}", root.display());
+    with_download_lock(download_guard, &meta_key, || {
+        resolve_downloaded_index_dir_inner(lang, base, force_version_check, download_guard, &root)
+    })
+}
+
+fn resolve_downloaded_index_dir_inner(
+    lang: &str,
+    base: Option<&Path>,
+    force_version_check: bool,
+    download_guard: Option<&DownloadCoordinator>,
+    root: &Path,
+) -> Result<PathBuf> {
+    let mut meta = read_downloaded_meta(root)?;
     let now = unix_now();
 
     let checked_release = if force_version_check || should_check_latest_version(&meta, now) {
         let release = fetch_latest_release(download_guard)?;
         meta.latest_version_check_time = Some(now);
-        write_downloaded_meta(&root, &meta)?;
+        write_downloaded_meta(root, &meta)?;
         Some(release)
     } else {
         None
@@ -149,11 +163,11 @@ fn resolve_downloaded_index_dir(
             .ok_or_else(|| anyhow!("no downloaded index version recorded in meta.json"))?
     };
 
-    let index_dir = release_index_dir(&root, version, lang)?;
+    let index_dir = release_index_dir(root, version, lang)?;
     if index_dir.is_dir() {
         if meta.current_version.as_deref() != Some(version) {
             meta.current_version = Some(version.to_string());
-            write_downloaded_meta(&root, &meta)?;
+            write_downloaded_meta(root, &meta)?;
         }
         return Ok(index_dir);
     }
@@ -167,7 +181,7 @@ fn resolve_downloaded_index_dir(
     meta.current_version = Some(release.tag_name.clone());
     meta.current_version_downloaded_time = Some(now);
     meta.latest_version_check_time = Some(now);
-    write_downloaded_meta(&root, &meta)?;
+    write_downloaded_meta(root, &meta)?;
     Ok(entry.path)
 }
 
@@ -691,6 +705,8 @@ fn read_downloaded_meta(index_root: &Path) -> Result<DownloadedIndexMeta> {
     })
 }
 
+static META_WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
 fn write_downloaded_meta(index_root: &Path, meta: &DownloadedIndexMeta) -> Result<()> {
     let path = index_meta_path(index_root);
     if let Some(parent) = path.parent() {
@@ -704,16 +720,28 @@ fn write_downloaded_meta(index_root: &Path, meta: &DownloadedIndexMeta) -> Resul
         "current_version_downloaded_time": meta.current_version_downloaded_time,
     });
     let bytes = serde_json::to_vec_pretty(&value)?;
-    let temp_path = path.with_extension("json.tmp");
+    let write_id = META_WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let temp_path = path.with_file_name(format!(
+        "{}.{}.{}.tmp",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("meta.json"),
+        std::process::id(),
+        write_id
+    ));
     fs::write(&temp_path, &bytes)
         .with_context(|| format!("failed to write {}", temp_path.display()))?;
-    fs::rename(&temp_path, &path).with_context(|| {
+    let rename_result = fs::rename(&temp_path, &path).with_context(|| {
         format!(
             "failed to move {} to {}",
             temp_path.display(),
             path.display()
         )
-    })?;
+    });
+    if rename_result.is_err() && temp_path.exists() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    rename_result?;
     Ok(())
 }
 
@@ -765,7 +793,11 @@ fn agent_builder() -> ureq::AgentBuilder {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
     use super::*;
+    use crate::download_guard::DownloadCoordinator;
 
     fn temp_root(name: &str) -> PathBuf {
         let root =
@@ -880,6 +912,59 @@ mod tests {
             &no_version,
             1_000 + VERSION_CHECK_INTERVAL.as_secs() - 1
         ));
+    }
+
+    #[test]
+    fn concurrent_meta_writes_succeed() {
+        let root = temp_root("concurrent-meta-write");
+        let barrier = Arc::new(Barrier::new(8));
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let barrier = Arc::clone(&barrier);
+            let root = root.clone();
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                let mut meta = read_downloaded_meta(&root).unwrap();
+                meta.latest_version_check_time = Some(i);
+                write_downloaded_meta(&root, &meta).unwrap();
+            }));
+        }
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert!(index_meta_path(&root).is_file());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn concurrent_meta_writes_with_download_coordinator_succeed() {
+        let root = temp_root("concurrent-meta-coordinator");
+        let coordinator = Arc::new(DownloadCoordinator::new());
+        let meta_key = format!("meta:{}", root.display());
+        let barrier = Arc::new(Barrier::new(8));
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let barrier = Arc::clone(&barrier);
+            let coordinator = Arc::clone(&coordinator);
+            let root = root.clone();
+            let meta_key = meta_key.clone();
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                with_download_lock(Some(coordinator.as_ref()), &meta_key, || {
+                    let mut meta = read_downloaded_meta(&root)?;
+                    meta.latest_version_check_time = Some(i);
+                    write_downloaded_meta(&root, &meta)
+                })
+                .unwrap();
+            }));
+        }
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert!(index_meta_path(&root).is_file());
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
