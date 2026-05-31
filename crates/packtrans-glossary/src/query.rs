@@ -50,20 +50,24 @@ pub struct QueryHit {
 }
 
 /// Queries a Tantivy index and prints matching documents.
-pub fn query_index(options: QueryOptions) -> Result<()> {
+pub fn query_index(options: QueryOptions, json: bool) -> Result<()> {
     let hits = search_index(options)?;
-    println!("confidence\tmod_id\tkey\tsource\tsource_lang\ttarget_lang\ttarget");
-    for hit in hits {
-        println!(
-            "{:.2}\t{}\t{}\t{}\t{}\t{}\t{}",
-            hit.confidence,
-            hit.mod_id,
-            hit.key,
-            hit.source,
-            hit.source_lang,
-            hit.target_lang,
-            hit.target
-        );
+    if json {
+        println!("{}", serde_json::to_string(&hits)?);
+    } else {
+        println!("confidence\tmod_id\tkey\tsource\tsource_lang\ttarget_lang\ttarget");
+        for hit in hits {
+            println!(
+                "{:.2}\t{}\t{}\t{}\t{}\t{}\t{}",
+                hit.confidence,
+                hit.mod_id,
+                hit.key,
+                hit.source,
+                hit.source_lang,
+                hit.target_lang,
+                hit.target
+            );
+        }
     }
     Ok(())
 }
