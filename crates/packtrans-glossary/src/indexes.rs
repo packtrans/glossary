@@ -21,29 +21,38 @@ const VERSION_CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Subcommand)]
 pub enum IndexCommand {
+    /// Download the latest release index for a language.
     Download(IndexDownloadCommand),
+    /// Download the latest release index and remove older versions.
     Upgrade(IndexDownloadCommand),
+    /// List installed release indexes.
     Ls,
+    /// Delete a downloaded index.
     Delete(IndexDeleteCommand),
+    /// Remove old index versions.
     Clean(IndexCleanCommand),
 }
 
 #[derive(Args)]
 pub struct IndexDownloadCommand {
+    /// Target language code (e.g. `zh_cn`, `ja_jp`).
     #[arg(long)]
     pub lang: String,
 }
 
 #[derive(Args)]
 pub struct IndexDeleteCommand {
+    /// Target language code to delete.
     #[arg(long)]
     pub lang: String,
+    /// Index release version to delete (defaults to latest installed).
     #[arg(long)]
     pub version: Option<String>,
 }
 
 #[derive(Args)]
 pub struct IndexCleanCommand {
+    /// Release version to keep (defaults to current or latest installed).
     #[arg(long)]
     pub keep_version: Option<String>,
 }

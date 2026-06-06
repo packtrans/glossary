@@ -8,20 +8,27 @@ use crate::progress;
 
 #[derive(Subcommand)]
 pub enum DictCommand {
+    /// Download tokenizer dictionaries.
     Download(DictDownloadCommand),
+    /// List installed dictionaries.
     Ls,
+    /// Delete a dictionary.
     Delete(DictDeleteCommand),
+    /// Remove old dictionary versions.
     Clean,
 }
 
 #[derive(Args)]
 pub struct DictDownloadCommand {
+    /// Dictionary name to download (downloads all if omitted).
     name: Option<String>,
 }
 
 #[derive(Args)]
 pub struct DictDeleteCommand {
+    /// Dictionary name to delete.
     name: String,
+    /// Dictionary version to delete (defaults to current).
     #[arg(long)]
     version: Option<String>,
 }

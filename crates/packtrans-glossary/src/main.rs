@@ -22,18 +22,23 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
 
+    /// Base directory for Lindera tokenizer dictionaries.
     #[arg(long)]
     dict_path: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Search glossary translations.
     Query(QueryCommand),
+    /// Start an HTTP API server for queries (experimental, local use only).
     Serve(ServeCommand),
+    /// Manage Lindera tokenizer dictionaries.
     Dict {
         #[command(subcommand)]
         command: DictCommand,
     },
+    /// Manage release-downloaded search indexes.
     Index {
         #[command(subcommand)]
         command: IndexCommand,
@@ -67,18 +72,22 @@ fn main() -> Result<()> {
 
 #[derive(Args)]
 struct QueryCommand {
+    /// Search text.
     query: String,
 
     /// Local index root directory; queries `{index_dir}/{lang}` (same layout as `index --out`).
     #[arg(long)]
     index_dir: Option<PathBuf>,
 
+    /// Target language code (e.g. `zh_cn`, `ja_jp`).
     #[arg(long)]
     lang: String,
 
+    /// Maximum number of results to return.
     #[arg(long, default_value_t = 10)]
     limit: usize,
 
+    /// Search target-language text and return source-language matches.
     #[arg(long)]
     inverse: bool,
 
