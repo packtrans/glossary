@@ -1,3 +1,4 @@
 target
-indexes
-res
+indexes/
+res/
+bin/
