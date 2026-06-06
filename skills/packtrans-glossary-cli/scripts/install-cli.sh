@@ -8,6 +8,9 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 BIN_DIR="${BIN_DIR:-${PROJECT_ROOT}/bin}"
 VERSION="${VERSION:-}"
 
+CURL_API_OPTS=(--retry 3 --retry-all-errors --retry-connrefused --connect-timeout 10 --max-time 30)
+CURL_DOWNLOAD_OPTS=(--retry 3 --retry-all-errors --retry-connrefused --connect-timeout 10 --max-time 120)
+
 detect_target() {
   local os arch
   os="$(uname -s)"
@@ -32,7 +35,8 @@ detect_target() {
 }
 
 fetch_latest_tag() {
-  curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" |
+  curl -fsSL "${CURL_API_OPTS[@]}" \
+    "https://api.github.com/repos/${REPO}/releases/latest" |
     sed -n 's/.*"tag_name": "\([^"]*\)".*/\1/p' | head -1
 }
 
@@ -51,6 +55,10 @@ main() {
   target="$(detect_target)"
   if [[ -z "${VERSION}" ]]; then
     tag="$(fetch_latest_tag)"
+    if [[ -z "${tag}" ]]; then
+      echo "error: failed to resolve latest release tag for ${REPO}" >&2
+      return 1
+    fi
   else
     tag="${VERSION}"
     [[ "${tag}" == v* ]] || tag="v${tag}"
@@ -64,7 +72,7 @@ main() {
     url="https://github.com/${REPO}/releases/download/${tag}/${archive_name}"
     _install_tmpdir="$(mktemp -d)"
     archive_path="${_install_tmpdir}/${archive_name}"
-    curl -fsSL -o "${archive_path}" "${url}"
+    curl -fsSL "${CURL_DOWNLOAD_OPTS[@]}" -o "${archive_path}" "${url}"
     unzip -q "${archive_path}" -d "${_install_tmpdir}/extract"
     dest="${BIN_DIR}/${binary_name}"
     cp "${_install_tmpdir}/extract/packtrans-glossary-${tag}-${target}/${binary_name}" "${dest}"
@@ -74,7 +82,7 @@ main() {
     url="https://github.com/${REPO}/releases/download/${tag}/${archive_name}"
     _install_tmpdir="$(mktemp -d)"
     archive_path="${_install_tmpdir}/${archive_name}"
-    curl -fsSL -o "${archive_path}" "${url}"
+    curl -fsSL "${CURL_DOWNLOAD_OPTS[@]}" -o "${archive_path}" "${url}"
     tar -xzf "${archive_path}" -C "${_install_tmpdir}"
     dest="${BIN_DIR}/${binary_name}"
     cp "${_install_tmpdir}/packtrans-glossary-${tag}-${target}/${binary_name}" "${dest}"

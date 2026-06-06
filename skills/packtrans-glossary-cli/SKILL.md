@@ -41,14 +41,18 @@ $CLI query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 20
 ```
 
 
+| Flag        | Notes                             |
+| ----------- | --------------------------------- |
+| `--lang`    | Required (e.g. `zh_cn`, `ja_jp`)  |
+| `--limit`   | Default `10`                      |
+| `--inverse` | Search target text, return source |
+| `--json`    | JSON array (same shape as `serve`) |
+
+**Global flag** (place before the subcommand, e.g. `$CLI --dict-path /path query …`):
+
 | Flag          | Notes                                |
 | ------------- | ------------------------------------ |
-| `--lang`      | Required (e.g. `zh_cn`, `ja_jp`)     |
-| `--limit`     | Default `10`                         |
-| `--inverse`   | Search target text, return source    |
-| `--json`      | JSON array (same shape as `serve`)   |
 | `--dict-path` | Override Lindera dictionary location |
-
 
 Default data dir: `~/.local/share/packtrans-glossary/indexes/` (Linux), `~/Library/Application Support/packtrans-glossary/indexes/` (macOS), `%LOCALAPPDATA%\packtrans-glossary\indexes\` (Windows).
 
