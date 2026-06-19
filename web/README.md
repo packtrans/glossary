@@ -7,7 +7,7 @@ Static React demo for `packtrans-glossary-wasm`, powered by [Vite+](https://vite
 - [`vp` CLI](https://viteplus.dev/) (install: `curl -fsSL https://vite.plus | bash`)
 - Rust 1.85+ and `wasm-pack`
 
-Vite+ manages the Node.js runtime and npm version for this project.
+Vite+ manages the Node.js runtime and pnpm version for this project.
 
 ## Commands
 
@@ -15,7 +15,7 @@ Use `vp` for day-to-day work:
 
 ```sh
 cd web
-vp install   # install dependencies
+vp install   # install dependencies (pnpm)
 vp dev       # dev server (runs WASM prebuild via predev)
 vp check     # format + lint + type-check
 vp build     # production build (runs WASM prebuild via prebuild)

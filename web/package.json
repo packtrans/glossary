@@ -38,15 +38,17 @@
     "vite-plugin-wasm": "^3.5.0",
     "vite-plus": "latest"
   },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "4.1.9"
-  },
   "devEngines": {
     "packageManager": {
-      "name": "npm",
-      "version": "11.17.0",
+      "name": "pnpm",
+      "version": "^10.0.0",
       "onFail": "download"
+    }
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "4.1.9"
     }
   }
 }
