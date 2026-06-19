@@ -290,6 +290,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::io::{self, BufWriter, Write};
+    use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
     use tantivy::schema::{STORED, Schema, TEXT};
@@ -329,6 +330,18 @@ mod tests {
         assert_eq!(hits[0].source_lang, "fr_fr");
         assert_eq!(hits[0].target, "Cooking Pot");
         assert_eq!(hits[0].target_lang, "en_us");
+    }
+
+    #[test]
+    #[ignore = "run via web/scripts/generate-sample-index.sh"]
+    fn write_sample_index_zip() {
+        let zip_bytes = build_test_index_zip("zh_cn");
+        let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../web/public/indexes/zh_cn.sample.zip");
+        if let Some(parent) = output.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&output, zip_bytes).unwrap();
     }
 
     #[test]
