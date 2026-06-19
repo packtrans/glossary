@@ -1,24 +1,18 @@
-import { useState } from 'react'
-import { Search } from 'lucide-react'
+import { useState } from "react";
+import { Search } from "lucide-react";
 
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 type SearchFormProps = {
-  disabled?: boolean
-  onSearch: (query: string, limit: number) => void | Promise<void>
-}
+  disabled?: boolean;
+  onSearch: (query: string, limit: number) => void | Promise<void>;
+};
 
 export function SearchForm({ disabled = false, onSearch }: SearchFormProps) {
-  const [query, setQuery] = useState('Cooking Pot')
-  const [limit, setLimit] = useState('10')
+  const [query, setQuery] = useState("Cooking Pot");
+  const [limit, setLimit] = useState("10");
 
   return (
     <Card>
@@ -32,9 +26,9 @@ export function SearchForm({ disabled = false, onSearch }: SearchFormProps) {
         <form
           className="flex flex-col gap-4 sm:flex-row sm:items-end"
           onSubmit={(event) => {
-            event.preventDefault()
-            const parsedLimit = Number.parseInt(limit, 10)
-            void onSearch(query, Number.isFinite(parsedLimit) ? parsedLimit : 10)
+            event.preventDefault();
+            const parsedLimit = Number.parseInt(limit, 10);
+            void onSearch(query, Number.isFinite(parsedLimit) ? parsedLimit : 10);
           }}
         >
           <div className="grid flex-1 gap-2">
@@ -70,5 +64,5 @@ export function SearchForm({ disabled = false, onSearch }: SearchFormProps) {
         </form>
       </CardContent>
     </Card>
-  )
+  );
 }

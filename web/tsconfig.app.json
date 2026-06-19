@@ -4,12 +4,9 @@
     "target": "ES2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "types": ["vite/client"],
+    "types": ["vite-plus/client"],
     "skipLibCheck": true,
     "ignoreDeprecations": "6.0",
-
-  /* Bundler mode */
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
@@ -20,7 +17,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-  /* Linting */
+    /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,

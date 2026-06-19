@@ -1,15 +1,15 @@
-import { AlertCircle, LoaderCircle } from 'lucide-react'
+import { AlertCircle, LoaderCircle } from "lucide-react";
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import type { GlossaryStatus } from '@/types/glossary'
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import type { GlossaryStatus } from "@/types/glossary";
 
 type StatusAlertProps = {
-  status: GlossaryStatus
-  error: string | null
-}
+  status: GlossaryStatus;
+  error: string | null;
+};
 
 export function StatusAlert({ status, error }: StatusAlertProps) {
-  if (status === 'loading-index') {
+  if (status === "loading-index") {
     return (
       <Alert>
         <LoaderCircle className="animate-spin" />
@@ -18,17 +18,17 @@ export function StatusAlert({ status, error }: StatusAlertProps) {
           Fetching the bundled `zh_cn` index into WebAssembly memory.
         </AlertDescription>
       </Alert>
-    )
+    );
   }
 
-  if (status === 'searching') {
+  if (status === "searching") {
     return (
       <Alert>
         <LoaderCircle className="animate-spin" />
         <AlertTitle>Searching</AlertTitle>
         <AlertDescription>Running the query in the WASM module.</AlertDescription>
       </Alert>
-    )
+    );
   }
 
   if (error) {
@@ -38,8 +38,8 @@ export function StatusAlert({ status, error }: StatusAlertProps) {
         <AlertTitle>Something went wrong</AlertTitle>
         <AlertDescription>{error}</AlertDescription>
       </Alert>
-    )
+    );
   }
 
-  return null
+  return null;
 }

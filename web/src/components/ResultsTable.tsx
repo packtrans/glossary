@@ -1,10 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -12,17 +6,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import type { QueryHit } from '@/types/glossary'
+} from "@/components/ui/table";
+import type { QueryHit } from "@/types/glossary";
 
 type ResultsTableProps = {
-  hits: QueryHit[]
-  query: string
-}
+  hits: QueryHit[];
+  query: string;
+};
 
 export function ResultsTable({ hits, query }: ResultsTableProps) {
   if (!query) {
-    return null
+    return null;
   }
 
   return (
@@ -32,7 +26,7 @@ export function ResultsTable({ hits, query }: ResultsTableProps) {
         <CardDescription>
           {hits.length === 0
             ? `No matches for "${query}".`
-            : `${hits.length} match${hits.length === 1 ? '' : 'es'} for "${query}".`}
+            : `${hits.length} match${hits.length === 1 ? "" : "es"} for "${query}".`}
         </CardDescription>
       </CardHeader>
       <CardContent className="overflow-x-auto">
@@ -62,5 +56,5 @@ export function ResultsTable({ hits, query }: ResultsTableProps) {
         ) : null}
       </CardContent>
     </Card>
-  )
+  );
 }
