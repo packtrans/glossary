@@ -2,7 +2,7 @@
   "name": "packtrans-glossary",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter packtrans-glossary-web run build",
+    "build": "bash scripts/build-web.sh",
     "deploy": "pnpm --filter packtrans-glossary-web run deploy"
   },
   "engines": {
@@ -24,6 +24,7 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "sharp",
+      "wasm-pack",
       "workerd"
     ],
     "overrides": {
