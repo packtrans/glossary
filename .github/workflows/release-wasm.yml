@@ -57,7 +57,8 @@ jobs:
               | jq -r '.packages[] | select(.name=="packtrans-glossary-wasm") | .version')
           fi
           jq --arg version "$VERSION" \
-            '.version = $version
+            '.name = "@packtrans/glossary"
+             | .version = $version
              | .repository = "git+https://github.com/packtrans/glossary.git"
              | .publishConfig = {"registry": "https://npm.pkg.github.com"}' \
             package.json > package.json.tmp
