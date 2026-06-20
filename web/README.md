@@ -34,11 +34,13 @@ vp run build:wasm
 
 - Hardcoded `zh_cn` language
 - Source-to-target search only (inverse CJK queries are not supported in WASM)
-- Pure static site: the glossary index zip is fetched at runtime from PackTrans CDN (via a same-origin proxy) and loaded into WASM memory in the browser
+- Pure static site: the glossary index zip is fetched cross-origin from PackTrans CDN (CORS-enabled) and loaded into WASM memory in the browser
 
-CDN source (proxied at `/glossary-index.zip`):
+CDN index URL (`src/glossary-index-source.ts`):
 
 `https://cdn.packtrans.download/glossary/packtrans-glossary-index-zh_cn-20260601.zip`
+
+Local dev uses `http://localhost:5173` (Vite `server.host`) so the browser origin matches CDN CORS. `127.0.0.1:5173` is a different origin and will be blocked unless you add it on the CDN too.
 
 ## Tooling notes
 

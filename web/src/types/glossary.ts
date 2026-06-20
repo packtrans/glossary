@@ -1,4 +1,4 @@
-import { INDEX_FETCH_PATH } from "@/glossary-index-source";
+import { INDEX_CDN_URL } from "@/glossary-index-source";
 
 export interface QueryHit {
   confidence: number;
@@ -13,4 +13,4 @@ export interface QueryHit {
 export type GlossaryStatus = "loading-index" | "ready" | "searching" | "error";
 
 export const DEMO_LANG = "zh_cn" as const;
-export const INDEX_URL = INDEX_FETCH_PATH;
+export const INDEX_URL = INDEX_CDN_URL;
