@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - "v*"
+    paths-ignore:
+      - "crates/packtrans-glossary-wasm/**"
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
