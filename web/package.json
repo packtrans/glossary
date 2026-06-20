@@ -9,7 +9,7 @@
     "prebuild": "vp run build:wasm",
     "dev": "vp dev",
     "build": "tsc -b && vp build",
-    "deploy": "vp build && vp exec wrangler deploy --config dist/wrangler.json",
+    "deploy": "vp build && vp exec wrangler deploy",
     "lint": "vp lint .",
     "preview": "vp preview"
   },
