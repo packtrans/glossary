@@ -43,7 +43,7 @@ vp run build:wasm
 - Source-to-target search only (inverse CJK queries are not supported in WASM)
 - Pure static site: the glossary index zip is fetched cross-origin from PackTrans CDN (CORS-enabled) and loaded into WASM memory in the browser
 
-CDN index URL (`src/glossary-index-source.ts`):
+CDN index URL (`src/types/glossary.ts`):
 
 `https://cdn.packtrans.download/glossary/packtrans-glossary-index-zh_cn-20260601.zip`
 
