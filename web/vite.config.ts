@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, lazyPlugins } from "vite-plus";
 import wasm from "vite-plugin-wasm";
 
+import { INDEX_CDN_URL } from "./src/glossary-index-source.ts";
+
 // https://vite.dev/config/
 export default defineConfig({
   fmt: {},
@@ -141,6 +143,13 @@ export default defineConfig({
   server: {
     fs: {
       allow: [".."],
+    },
+    proxy: {
+      "/glossary-index.zip": {
+        target: new URL(INDEX_CDN_URL).origin,
+        changeOrigin: true,
+        rewrite: () => new URL(INDEX_CDN_URL).pathname,
+      },
     },
   },
 });

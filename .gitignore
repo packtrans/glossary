@@ -5,4 +5,3 @@ bin/
 web/node_modules/
 web/dist/
 web/pkg/
-web/public/indexes/zh_cn.zip

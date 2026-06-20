@@ -22,21 +22,23 @@ vp build     # production build (runs WASM prebuild via prebuild)
 vp preview   # serve dist/ locally
 ```
 
-Custom project scripts (WASM + index management) run through `vp run`:
+Rebuild the WASM bindings manually when needed:
 
 ```sh
-vp run download-index        # fetch latest zh_cn release asset
-vp run generate-sample-index # regenerate committed sample zip
-vp run build:wasm            # rebuild packtrans-glossary-wasm pkg/
+vp run build:wasm
 ```
 
-`predev` / `prebuild` call `vp run build:wasm` and `vp run ensure-index` automatically.
+`predev` / `prebuild` run `vp run build:wasm` automatically.
 
 ## Demo scope
 
 - Hardcoded `zh_cn` language
 - Source-to-target search only (inverse CJK queries are not supported in WASM)
-- Pure static site: index zip is served from `public/` and loaded into WASM memory in the browser
+- Pure static site: the glossary index zip is fetched at runtime from PackTrans CDN (via a same-origin proxy) and loaded into WASM memory in the browser
+
+CDN source (proxied at `/glossary-index.zip`):
+
+`https://cdn.packtrans.download/glossary/packtrans-glossary-index-zh_cn-20260601.zip`
 
 ## Tooling notes
 

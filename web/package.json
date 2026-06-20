@@ -5,11 +5,8 @@
   "type": "module",
   "scripts": {
     "build:wasm": "wasm-pack build --target bundler --out-dir \"$PWD/pkg\" ../crates/packtrans-glossary-wasm",
-    "ensure-index": "bash scripts/ensure-index.sh",
-    "generate-sample-index": "bash scripts/generate-sample-index.sh",
-    "download-index": "bash scripts/download-index.sh",
-    "predev": "vp run build:wasm && vp run ensure-index",
-    "prebuild": "vp run build:wasm && vp run ensure-index",
+    "predev": "vp run build:wasm",
+    "prebuild": "vp run build:wasm",
     "dev": "vp dev",
     "build": "tsc -b && vp build",
     "deploy": "vp build && vp exec wrangler deploy",

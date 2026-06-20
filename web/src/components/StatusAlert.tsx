@@ -15,7 +15,7 @@ export function StatusAlert({ status, error }: StatusAlertProps) {
         <LoaderCircle className="animate-spin" />
         <AlertTitle>Loading glossary index</AlertTitle>
         <AlertDescription>
-          Fetching the bundled `zh_cn` index into WebAssembly memory.
+          Downloading the `zh_cn` glossary index from CDN into WebAssembly memory.
         </AlertDescription>
       </Alert>
     );

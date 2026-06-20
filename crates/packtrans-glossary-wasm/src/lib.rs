@@ -204,6 +204,9 @@ fn load_zip_into_ram_directory(index_zip: &[u8], lang: &str) -> Result<RamDirect
         let Some(relative_path) = normalize_index_entry_path(&enclosed_name, lang)? else {
             continue;
         };
+        if should_skip_index_entry(&relative_path) {
+            continue;
+        }
 
         let mut bytes = Vec::with_capacity(entry.size() as usize);
         entry
@@ -219,6 +222,13 @@ fn load_zip_into_ram_directory(index_zip: &[u8], lang: &str) -> Result<RamDirect
         bail!("index zip archive did not contain any readable files");
     }
     Ok(directory)
+}
+
+fn should_skip_index_entry(relative_path: &Path) -> bool {
+    relative_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(".lock"))
 }
 
 fn normalize_index_entry_path(path: &Path, lang: &str) -> Result<Option<PathBuf>> {
@@ -330,18 +340,6 @@ mod tests {
         assert_eq!(hits[0].source_lang, "fr_fr");
         assert_eq!(hits[0].target, "Cooking Pot");
         assert_eq!(hits[0].target_lang, "en_us");
-    }
-
-    #[test]
-    #[ignore = "run via web/scripts/generate-sample-index.sh"]
-    fn write_sample_index_zip() {
-        let zip_bytes = build_test_index_zip("zh_cn");
-        let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../web/public/indexes/zh_cn.sample.zip");
-        if let Some(parent) = output.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        std::fs::write(&output, zip_bytes).unwrap();
     }
 
     #[test]
@@ -503,3 +501,4 @@ mod tests {
         }
     }
 }
+
