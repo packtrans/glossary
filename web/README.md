@@ -43,3 +43,44 @@ vp run build:wasm            # rebuild packtrans-glossary-wasm pkg/
 - Lint/format config lives in `vite.config.ts` (`lint`, `fmt` blocks) — ESLint was removed during Vite+ migration
 - `vp check` replaces separate `eslint` + `tsc` runs for local validation
 - `vp test` is available when you add `*.test.ts(x)` files; there are none in this demo yet
+
+## Deploy to Cloudflare Workers
+
+The app is a static SPA served from `dist/` via [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/). Configuration is in `wrangler.jsonc`.
+
+### Temporary preview deploy (no Cloudflare account)
+
+For agent/CI-less previews, use Wrangler’s temporary account flow ([docs](https://developers.cloudflare.com/workers/platform/claim-deployments/)):
+
+```sh
+cd web
+vp run deploy:temporary
+```
+
+This runs `vp build`, then `wrangler deploy --temporary`. Wrangler prints:
+
+- A `workers.dev` URL for the deployment
+- A **claim URL** (valid ~60 minutes) to transfer the preview account to your Cloudflare account
+
+**Important:** open the claim URL before it expires if you want to keep the deployment. After claiming, run `wrangler login` and use `vp run deploy` (without `--temporary`) for permanent deploys.
+
+Requirements: Wrangler **4.102.0+** (included as a dev dependency).
+
+### Permanent deploy
+
+After `wrangler login` (or with `CLOUDFLARE_API_TOKEN` in CI):
+
+```sh
+cd web
+vp run deploy
+```
+
+### Local Workers preview
+
+Serve the built `dist/` through the Workers runtime locally:
+
+```sh
+cd web
+vp build
+vp exec wrangler dev
+```
