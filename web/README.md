@@ -26,7 +26,7 @@ vp install   # install dependencies (pnpm)
 vp dev       # dev server (runs WASM prebuild via predev)
 vp check     # format + lint + type-check
 vp build     # production build (runs WASM prebuild via prebuild)
-vp preview   # serve dist/ locally
+vp preview   # preview via Workers runtime (Cloudflare Vite plugin)
 ```
 
 Rebuild the WASM bindings manually when needed:
@@ -57,7 +57,7 @@ Local dev uses `http://localhost:5173` (Vite `server.host`) so the browser origi
 
 ## Deploy to Cloudflare Workers
 
-The app is a static SPA served from `dist/` via [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/). Configuration is in `wrangler.toml`.
+The app is a static SPA deployed with the [Cloudflare Vite plugin](https://developers.cloudflare.com/workers/vite-plugin/). Input configuration is in `wrangler.toml`; `vp build` emits client assets and an output `wrangler.json` under `dist/` for preview and deploy.
 
 After `wrangler login` (or with `CLOUDFLARE_API_TOKEN` in CI):
 
@@ -73,10 +73,10 @@ Requirements: Wrangler **4.102.0+** (included as a dev dependency).
 
 ### Local Workers preview
 
-Serve the built `dist/` through the Workers runtime locally:
+Preview the production build in the Workers runtime (matches deployed behavior):
 
 ```sh
 cd web
 vp build
-vp exec wrangler dev
+vp preview
 ```

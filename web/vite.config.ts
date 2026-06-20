@@ -1,4 +1,5 @@
 import path from "node:path";
+import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, lazyPlugins } from "vite-plus";
@@ -129,7 +130,7 @@ export default defineConfig({
       "vite-plus/prefer-vite-plus-imports": "error",
     },
   },
-  plugins: lazyPlugins(() => [react(), tailwindcss(), wasm()]),
+  plugins: lazyPlugins(() => [react(), tailwindcss(), wasm(), cloudflare()]),
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
