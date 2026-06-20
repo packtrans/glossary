@@ -1,7 +1,7 @@
 import { AlertCircle, LoaderCircle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import type { GlossaryStatus } from "@/types/glossary";
+import { DEMO_LANG, type GlossaryStatus } from "@/types/glossary";
 
 type StatusAlertProps = {
   status: GlossaryStatus;
@@ -15,7 +15,7 @@ export function StatusAlert({ status, error }: StatusAlertProps) {
         <LoaderCircle className="animate-spin" />
         <AlertTitle>Loading glossary index</AlertTitle>
         <AlertDescription>
-          Downloading the `zh_cn` glossary index from CDN into WebAssembly memory.
+          Downloading the `{DEMO_LANG}` glossary index from CDN into WebAssembly memory.
         </AlertDescription>
       </Alert>
     );

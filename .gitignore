@@ -1,7 +1,7 @@
 target
 /indexes/
-res/
-bin/
+/res/
+/bin/
 node_modules/
 web/dist/
 web/pkg/

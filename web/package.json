@@ -33,9 +33,9 @@
     "@vitejs/plugin-react": "^6.0.1",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.2",
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.1",
     "vite-plugin-wasm": "^3.5.0",
-    "vite-plus": "latest",
+    "vite-plus": "0.2.1",
     "wrangler": "^4.103.0"
   }
 }

@@ -62,6 +62,7 @@ export function useGlossarySearch() {
     if (!trimmed) {
       setError("Enter a search term.");
       setHits([]);
+      setLastQuery("");
       return;
     }
 
@@ -81,7 +82,7 @@ export function useGlossarySearch() {
       setStatus("ready");
     } catch (searchError) {
       setHits([]);
-      setStatus("error");
+      setStatus("ready");
       setError(searchError instanceof Error ? searchError.message : String(searchError));
     }
   }, []);

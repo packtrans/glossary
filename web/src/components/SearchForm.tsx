@@ -10,6 +10,14 @@ type SearchFormProps = {
   onSearch: (query: string, limit: number) => void | Promise<void>;
 };
 
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 50;
+const DEFAULT_LIMIT = 10;
+
+function clampLimit(value: number): number {
+  return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, value));
+}
+
 export function SearchForm({ disabled = false, onSearch }: SearchFormProps) {
   const [query, setQuery] = useState("Cooking Pot");
   const [limit, setLimit] = useState("10");
@@ -28,7 +36,10 @@ export function SearchForm({ disabled = false, onSearch }: SearchFormProps) {
           onSubmit={(event) => {
             event.preventDefault();
             const parsedLimit = Number.parseInt(limit, 10);
-            void onSearch(query, Number.isFinite(parsedLimit) ? parsedLimit : 10);
+            const boundedLimit = Number.isFinite(parsedLimit)
+              ? clampLimit(parsedLimit)
+              : DEFAULT_LIMIT;
+            void onSearch(query, boundedLimit);
           }}
         >
           <div className="grid flex-1 gap-2">
@@ -49,9 +60,10 @@ export function SearchForm({ disabled = false, onSearch }: SearchFormProps) {
             </label>
             <Input
               id="limit"
+              type="number"
               inputMode="numeric"
-              min={1}
-              max={50}
+              min={MIN_LIMIT}
+              max={MAX_LIMIT}
               value={limit}
               disabled={disabled}
               onChange={(event) => setLimit(event.target.value)}
