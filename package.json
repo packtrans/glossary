@@ -5,11 +5,19 @@
     "build": "pnpm --filter packtrans-glossary-web run build",
     "deploy": "pnpm --filter packtrans-glossary-web run deploy"
   },
+  "engines": {
+    "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
+  },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
       "version": "10.34.4",
       "onFail": "download"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "^22.18.0",
+      "onFail": "error"
     }
   },
   "pnpm": {
