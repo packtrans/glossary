@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -48,12 +47,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${TAG#v}"
-          else
-            VERSION=$(cargo metadata --no-deps --format-version=1 \
-              | jq -r '.packages[] | select(.name=="packtrans-glossary-wasm") | .version')
-          fi
+          VERSION="${TAG#v}"
           jq --arg version "$VERSION" \
             '.name = "@packtrans/glossary"
              | .version = $version
