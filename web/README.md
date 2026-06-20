@@ -57,7 +57,7 @@ Local dev uses `http://localhost:5173` (Vite `server.host`) so the browser origi
 
 ## Deploy to Cloudflare Workers
 
-The app is a static SPA served from `dist/` via [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/). Configuration is in `wrangler.jsonc`.
+The app is a static SPA served from `dist/` via [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/). Configuration is in `wrangler.toml`.
 
 After `wrangler login` (or with `CLOUDFLARE_API_TOKEN` in CI):
 
