@@ -11,10 +11,17 @@ Vite+ manages the Node.js runtime and pnpm version for this project.
 
 ## Commands
 
-Use `vp` for day-to-day work:
+From the repo root (pnpm workspace):
 
 ```sh
-cd web
+vp install   # install all workspace dependencies
+pnpm build   # build web (WASM + Vite)
+pnpm deploy  # build and wrangler deploy
+```
+
+From `web/`:
+
+```sh
 vp install   # install dependencies (pnpm)
 vp dev       # dev server (runs WASM prebuild via predev)
 vp check     # format + lint + type-check
@@ -52,32 +59,17 @@ Local dev uses `http://localhost:5173` (Vite `server.host`) so the browser origi
 
 The app is a static SPA served from `dist/` via [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/). Configuration is in `wrangler.jsonc`.
 
-### Temporary preview deploy (no Cloudflare account)
-
-For agent/CI-less previews, use Wrangler’s temporary account flow ([docs](https://developers.cloudflare.com/workers/platform/claim-deployments/)):
-
-```sh
-cd web
-vp run deploy:temporary
-```
-
-This runs `vp build`, then `wrangler deploy --temporary`. Wrangler prints:
-
-- A `workers.dev` URL for the deployment
-- A **claim URL** (valid ~60 minutes) to transfer the preview account to your Cloudflare account
-
-**Important:** open the claim URL before it expires if you want to keep the deployment. After claiming, run `wrangler login` and use `vp run deploy` (without `--temporary`) for permanent deploys.
-
-Requirements: Wrangler **4.102.0+** (included as a dev dependency).
-
-### Permanent deploy
-
 After `wrangler login` (or with `CLOUDFLARE_API_TOKEN` in CI):
 
 ```sh
-cd web
+# from repo root
+pnpm deploy
+
+# or from web/
 vp run deploy
 ```
+
+Requirements: Wrangler **4.102.0+** (included as a dev dependency).
 
 ### Local Workers preview
 
