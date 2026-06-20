@@ -204,6 +204,9 @@ fn load_zip_into_ram_directory(index_zip: &[u8], lang: &str) -> Result<RamDirect
         let Some(relative_path) = normalize_index_entry_path(&enclosed_name, lang)? else {
             continue;
         };
+        if should_skip_index_entry(&relative_path) {
+            continue;
+        }
 
         let mut bytes = Vec::with_capacity(entry.size() as usize);
         entry
@@ -219,6 +222,13 @@ fn load_zip_into_ram_directory(index_zip: &[u8], lang: &str) -> Result<RamDirect
         bail!("index zip archive did not contain any readable files");
     }
     Ok(directory)
+}
+
+fn should_skip_index_entry(relative_path: &Path) -> bool {
+    relative_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(".lock"))
 }
 
 fn normalize_index_entry_path(path: &Path, lang: &str) -> Result<Option<PathBuf>> {
@@ -290,6 +300,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::io::{self, BufWriter, Write};
+    use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
     use tantivy::schema::{STORED, Schema, TEXT};
@@ -339,6 +350,51 @@ mod tests {
         let err = index.search("厨锅", 10, true).unwrap_err().to_string();
 
         assert!(err.contains("lindera-jieba tokenizer"));
+    }
+
+    #[test]
+    fn skips_lock_files_when_loading_index_zip() {
+        assert!(should_skip_index_entry(Path::new(".tantivy-meta.lock")));
+        assert!(!should_skip_index_entry(Path::new("meta.json")));
+
+        let zip_bytes = build_test_index_zip_with_lock("fr_fr");
+        let directory = load_zip_into_ram_directory(&zip_bytes, "fr_fr").unwrap();
+        assert!(
+            !directory
+                .exists(Path::new(".tantivy-meta.lock"))
+                .expect("exists check")
+        );
+
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr").unwrap();
+        let hits = index.search("Cooking Pot", 10, false).unwrap();
+        assert_eq!(hits.len(), 1);
+    }
+
+    fn build_test_index_zip_with_lock(lang: &str) -> Vec<u8> {
+        let zip_bytes = build_test_index_zip(lang);
+        add_file_to_zip(zip_bytes, &format!("{lang}/.tantivy-meta.lock"), &[])
+    }
+
+    fn add_file_to_zip(mut zip_bytes: Vec<u8>, entry_name: &str, data: &[u8]) -> Vec<u8> {
+        let cursor = Cursor::new(std::mem::take(&mut zip_bytes));
+        let mut archive = ZipArchive::new(cursor).unwrap();
+        let output = Cursor::new(Vec::new());
+        let mut writer = zip::ZipWriter::new(output);
+
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).unwrap();
+            let existing_name = entry.name().to_string();
+            writer
+                .start_file(&existing_name, SimpleFileOptions::default())
+                .unwrap();
+            std::io::copy(&mut entry, &mut writer).unwrap();
+        }
+
+        writer
+            .start_file(entry_name, SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(data).unwrap();
+        writer.finish().unwrap().into_inner()
     }
 
     fn build_test_index_zip(lang: &str) -> Vec<u8> {
@@ -490,3 +546,4 @@ mod tests {
         }
     }
 }
+
