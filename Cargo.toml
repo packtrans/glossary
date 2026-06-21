@@ -3,6 +3,7 @@ members = [
     "crates/packtrans-glossary-core",
     "crates/packtrans-glossary",
     "crates/packtrans-glossary-builder",
+    "crates/packtrans-glossary-wasm",
 ]
 resolver = "3"
 

@@ -2,11 +2,12 @@
 
 ## Project overview
 
-Rust CLI workspace for indexing/querying Minecraft mod translation glossaries. Three crates under `crates/`:
+Rust CLI workspace for indexing/querying Minecraft mod translation glossaries. Four crates under `crates/`:
 
 - `packtrans-glossary-core` — shared library (schema, tokenizers, download/zip utilities, index path helpers)
 - `packtrans-glossary` — query CLI with `query`, `dict`, and `index` subcommands
 - `packtrans-glossary-builder` — builder CLI with subcommands: `index`, `create-mod-list`, `download`
+- `packtrans-glossary-wasm` — WASM bindings for browser use (published as `@packtrans/glossary`)
 
 ## Toolchain requirement
 

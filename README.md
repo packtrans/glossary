@@ -28,7 +28,8 @@ This workspace provides two command-line utilities:
 crates/
 ├── packtrans-glossary-core       # Shared core library (schema, indexing, querying, tokenizers, utilities)
 ├── packtrans-glossary            # End-user query CLI
-└── packtrans-glossary-builder    # Index builder CLI (index, create-mod-list, download)
+├── packtrans-glossary-builder    # Index builder CLI (index, create-mod-list, download)
+└── packtrans-glossary-wasm       # WASM bindings for browser use (@packtrans/glossary)
 ```
 
 ## Resource Layout
