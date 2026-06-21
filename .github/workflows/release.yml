@@ -70,60 +70,6 @@ jobs:
           path: |
             packtrans-glossary-${{ github.ref_name }}-${{ matrix.target }}.*
 
-  publish-wasm:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Install wasm-pack
-        run: cargo install wasm-pack
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          registry-url: https://npm.pkg.github.com
-          scope: "@packtrans"
-
-      - name: Build WASM npm package
-        run: |
-          wasm-pack build \
-            --target bundler \
-            --scope packtrans \
-            --out-dir "$GITHUB_WORKSPACE/pkg" \
-            crates/packtrans-glossary-wasm
-
-      - name: Set package version and registry metadata
-        shell: bash
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          VERSION="${TAG#v}"
-          jq --arg version "$VERSION" \
-            '.name = "@packtrans/glossary"
-             | .version = $version
-             | .repository = "git+https://github.com/packtrans/glossary.git"
-             | .publishConfig = {"registry": "https://npm.pkg.github.com"}' \
-            package.json > package.json.tmp
-          mv package.json.tmp package.json
-        working-directory: pkg
-
-      - name: Publish to GitHub Packages
-        run: npm publish --access public
-        working-directory: pkg
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   release:
     needs: build
     runs-on: ubuntu-latest
