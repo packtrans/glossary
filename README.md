@@ -2,6 +2,8 @@
 
 Rust-based CLI tools for indexing and querying Minecraft mod glossary translations. Uses [Tantivy](https://github.com/quickwit-oss/tantivy) for fast full-text search and relevance scoring.
 
+We have also built a web App based on this repository at [packtrans/glossary-web](https://github.com/packtrans/glossary-web), try it on [https://glossary.packtrans.download](https://glossary.packtrans.download).
+
 ## Overview
 
 This workspace provides two command-line utilities:
