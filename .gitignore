@@ -2,6 +2,3 @@ target
 /indexes/
 /res/
 /bin/
-node_modules/
-web/dist/
-web/pkg/

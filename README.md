@@ -2,6 +2,8 @@
 
 Rust-based CLI tools for indexing and querying Minecraft mod glossary translations. Uses [Tantivy](https://github.com/quickwit-oss/tantivy) for fast full-text search and relevance scoring.
 
+We have also built a web App based on this repository at [packtrans/glossary-web](https://github.com/packtrans/glossary-web), try it on [https://glossary.packtrans.download](https://glossary.packtrans.download).
+
 ## Overview
 
 This workspace provides two command-line utilities:
@@ -29,7 +31,8 @@ This workspace provides two command-line utilities:
 crates/
 ├── packtrans-glossary-core       # Shared core library (schema, indexing, querying, tokenizers, utilities)
 ├── packtrans-glossary            # End-user query CLI
-└── packtrans-glossary-builder    # Index builder CLI (index, create-mod-list, download)
+├── packtrans-glossary-builder    # Index builder CLI (index, create-mod-list, download)
+└── packtrans-glossary-wasm       # WASM bindings for browser use (@packtrans/glossary)
 ```
 
 ## Resource Layout
@@ -120,6 +123,7 @@ packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 
 - `--limit` is optional; defaults to `10`.
 - `--inverse` searches target-language text and returns the source translation.
 - `--dict-path` optionally overrides the dictionary storage location (global query flag).
+- `--json` prints results as a JSON array (same shape as the `serve` HTTP API).
 
 ### HTTP Server
 
@@ -286,7 +290,6 @@ cargo run --bin packtrans-glossary -- serve --index-dir indexes
 ## Future Enhancements
 
 - `--force` flag to rebuild existing indexes
-- JSON output mode for the `query` CLI subcommand
 - Fuzzy match
 - Batch indexing of multiple target languages
 

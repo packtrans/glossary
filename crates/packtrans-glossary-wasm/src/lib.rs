@@ -153,8 +153,13 @@ impl GlossaryIndex {
             let target_lang = stored_text(&doc, out_tgt_lang_field);
             let target = stored_text(&doc, out_tgt_field);
 
-            if mod_id.is_empty() || key.is_empty() || source.is_empty()
-                || source_lang.is_empty() || target_lang.is_empty() || target.is_empty() {
+            if mod_id.is_empty()
+                || key.is_empty()
+                || source.is_empty()
+                || source_lang.is_empty()
+                || target_lang.is_empty()
+                || target.is_empty()
+            {
                 continue;
             }
 
@@ -546,4 +551,3 @@ mod tests {
         }
     }
 }
-
