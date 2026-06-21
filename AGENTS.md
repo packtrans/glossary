@@ -5,7 +5,7 @@
 Rust CLI workspace for indexing/querying Minecraft mod translation glossaries. Four crates under `crates/`:
 
 - `packtrans-glossary-core` — shared library (schema, tokenizers, download/zip utilities, index path helpers)
-- `packtrans-glossary` — query CLI with `query`, `dict`, and `index` subcommands
+- `packtrans-glossary` — query CLI with `query`, `serve`, `dict`, and `index` subcommands
 - `packtrans-glossary-builder` — builder CLI with subcommands: `index`, `create-mod-list`, `download`
 - `packtrans-glossary-wasm` — WASM bindings for browser use (published as `@packtrans/glossary`)
 
@@ -28,7 +28,7 @@ cargo fmt -- --check # Format check
 
 The builder has three subcommands: `index` (build a Tantivy index from language files), `create-mod-list` (fetch mod lists from APIs), and `download` (download mod jar language files from Modrinth/CurseForge/Minecraft).
 
-The query CLI supports `query` (search translations, with `--inverse` for reverse lookup), `dict` (manage Lindera dictionaries), and `index` (manage release-downloaded indexes in the default data directory).
+The query CLI supports `query` (search translations, with `--inverse` for reverse lookup), `serve` (HTTP API for queries), `dict` (manage Lindera dictionaries), and `index` (manage release-downloaded indexes in the default data directory).
 
 ### Index paths
 
@@ -51,6 +51,10 @@ cargo run --bin packtrans-glossary -- query --index-dir indexes --lang zh_cn "Co
 
 # Inverse query (search by target language text)
 cargo run --bin packtrans-glossary -- query --lang zh_cn "厨锅" --limit 10 --inverse
+
+# HTTP server (experimental; local use only — not for high parallel load)
+cargo run --bin packtrans-glossary -- serve
+# GET /query?lang=zh_cn&q=Cooking+Pot&limit=20&inverse=true
 
 # Manage release indexes (default data dir)
 cargo run --bin packtrans-glossary -- index download --lang zh_cn

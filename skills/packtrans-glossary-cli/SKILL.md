@@ -1,6 +1,6 @@
 ---
 name: packtrans-glossary-cli
-description: Installs the packtrans-glossary query binary from GitHub releases into bin/, runs translation queries, and manages release indexes and Lindera dictionaries. Use when querying Minecraft mod glossaries, downloading the CLI without building, index dict workflows.
+description: Installs the packtrans-glossary query binary from GitHub releases into bin/, runs translation queries, and manages release indexes and Lindera dictionaries. Use when querying Minecraft mod glossaries, downloading the CLI without building, index dict/serve workflows.
 ---
 
 # Packtrans Glossary CLI
@@ -46,7 +46,7 @@ $CLI query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 20
 | `--lang`    | Required (e.g. `zh_cn`, `ja_jp`)  |
 | `--limit`   | Default `10`                      |
 | `--inverse` | Search target text, return source |
-| `--json`    | JSON array of query hits          |
+| `--json`    | JSON array (same shape as `serve`) |
 
 **Global flag** (place before the subcommand, e.g. `$CLI --dict-path /path query …`):
 

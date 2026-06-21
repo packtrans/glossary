@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use packtrans_glossary_core::dictionary;
@@ -13,6 +14,7 @@ use tantivy::{
     schema::{Field, Value},
 };
 
+use crate::download_guard::DownloadCoordinator;
 use crate::indexes;
 use crate::progress;
 
@@ -31,6 +33,8 @@ pub struct QueryOptions {
     pub inverse: bool,
     /// Custom base path for dictionary lookup.
     pub dict_path: Option<PathBuf>,
+    /// When set (HTTP server), serializes concurrent downloads for the same resource.
+    pub download_guard: Option<Arc<DownloadCoordinator>>,
 }
 
 /// A single glossary search hit.
@@ -71,13 +75,21 @@ pub fn query_index(options: QueryOptions, json: bool) -> Result<()> {
 /// Queries a Tantivy index and returns matching documents.
 pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
     util::validate_path_segment(&options.lang, "lang")?;
-    let index_dir = indexes::resolve_query_index_dir(&options.lang, options.index_dir.as_deref())?;
+    let index_dir = indexes::resolve_query_index_dir(
+        &options.lang,
+        options.index_dir.as_deref(),
+        options.download_guard.as_deref(),
+    )?;
     let dir = MmapDirectory::open(&index_dir)
         .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;
     let index = Index::open(dir)
         .with_context(|| format!("failed to open index: {}", index_dir.display()))?;
 
-    ensure_tokenizer_dictionary(&options.lang, options.dict_path.as_deref())?;
+    ensure_tokenizer_dictionary(
+        &options.lang,
+        options.dict_path.as_deref(),
+        options.download_guard.as_deref(),
+    )?;
     tokenizer::register_for_language(&index, &options.lang, options.dict_path.as_deref())?;
 
     let schema = index.schema();
@@ -128,7 +140,11 @@ pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
     Ok(hits)
 }
 
-fn ensure_tokenizer_dictionary(lang: &str, base: Option<&std::path::Path>) -> Result<()> {
+fn ensure_tokenizer_dictionary(
+    lang: &str,
+    base: Option<&std::path::Path>,
+    download_guard: Option<&DownloadCoordinator>,
+) -> Result<()> {
     let name = tokenizer::target_tokenizer_name(lang);
     if name == "default" {
         return Ok(());
@@ -138,10 +154,21 @@ fn ensure_tokenizer_dictionary(lang: &str, base: Option<&std::path::Path>) -> Re
         return Ok(());
     }
 
-    let pb = progress::spinner(format!("Downloading {name} dictionary"));
-    let result = dictionary::ensure_dictionary(name, base);
-    pb.finish_and_clear();
-    result.map(|_| ())
+    let dict_root = match base {
+        Some(path) => path.to_path_buf(),
+        None => dictionary::dictionaries_root()?,
+    };
+    let lock_key = format!("dict:{}:{}", dict_root.display(), name);
+
+    crate::download_guard::with_download_lock(download_guard, &lock_key, || {
+        if dictionary::dictionary_path(name, base)?.is_dir() {
+            return Ok(());
+        }
+        let pb = progress::spinner(format!("Downloading {name} dictionary"));
+        let result = dictionary::ensure_dictionary(name, base);
+        pb.finish_and_clear();
+        result.map(|_| ())
+    })
 }
 
 /// Retrieves the stored text value for a field from a document.
