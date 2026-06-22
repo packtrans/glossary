@@ -9,21 +9,21 @@ Query workflow using the **prebuilt** `packtrans-glossary` binary.
 
 ## Install binary (skill `bin/`)
 
-From the repository root:
+`<skill-dir>` is the directory containing this `SKILL.md` (e.g. `skills/packtrans-glossary-cli` or `.agents/skills/packtrans-glossary-cli`).
 
 ```bash
-bash skills/packtrans-glossary-cli/scripts/install-cli.sh
+bash <skill-dir>/scripts/install-cli.sh
 ```
 
-Installs to `skills/packtrans-glossary-cli/bin/` (same directory as this skill).
+Installs to `<skill-dir>/bin/` (same directory as this skill).
 
 **Supported release targets:** `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc`.
 
-Set `CLI` for commands below:
+Set `CLI` for commands below (use the same `<skill-dir>`):
 
 ```bash
-CLI=./skills/packtrans-glossary-cli/bin/packtrans-glossary   # Unix
-# CLI=./skills/packtrans-glossary-cli/bin/packtrans-glossary.exe  # Windows
+CLI=<skill-dir>/bin/packtrans-glossary   # Unix
+# CLI=<skill-dir>/bin/packtrans-glossary.exe  # Windows
 ```
 
 ## Query translations
@@ -88,7 +88,7 @@ Names: `lindera-ipadic`, `lindera-ko-dic`, `lindera-jieba`.
 
 ## Agent checklist
 
-1. If `skills/packtrans-glossary-cli/bin/packtrans-glossary` is missing, run `install-cli.sh`.
+1. If `<skill-dir>/bin/packtrans-glossary` is missing, run `<skill-dir>/scripts/install-cli.sh`.
 2. For release queries without `--index-dir`, ensure network; run `index download --lang …` if you need the index before querying.
 3. For local `indexes/` trees, pass `--index-dir indexes` (root, not `indexes/zh_cn`).
 4. For any other commands not mentioned in this file, view help info with `$CLI --help`.
