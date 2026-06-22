@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Download only packtrans-glossary from the latest GitHub release into project bin/.
+# Download only packtrans-glossary from the latest GitHub release into skill bin/.
 set -euo pipefail
 
 REPO="${PACKTRANS_GLOSSARY_REPO:-packtrans/glossary}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-BIN_DIR="${BIN_DIR:-${PROJECT_ROOT}/bin}"
+SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BIN_DIR="${BIN_DIR:-${SKILL_DIR}/bin}"
 VERSION="${VERSION:-}"
 
 CURL_API_OPTS=(--retry 3 --retry-all-errors --retry-connrefused --connect-timeout 10 --max-time 30)
