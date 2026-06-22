@@ -3,6 +3,10 @@
 //! This crate never downloads index assets. JavaScript should fetch the release
 //! asset or other index archive and pass its bytes into [`GlossaryIndex`].
 
+mod dictionary;
+mod lindera_tantivy;
+mod tokenizer;
+
 use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 
@@ -44,7 +48,6 @@ pub struct GlossaryIndex {
     index: Index,
     reader: IndexReader,
     fields: Fields,
-    lang: String,
 }
 
 #[wasm_bindgen]
@@ -53,9 +56,17 @@ impl GlossaryIndex {
     ///
     /// The archive may contain Tantivy files at its root or under a `{lang}/`
     /// directory, matching PackTrans release assets.
+    ///
+    /// Pass optional `dict_zip` bytes to register a Lindera tokenizer for
+    /// inverse queries on indexes that use one. When omitted, the default
+    /// tokenizer is used.
     #[wasm_bindgen(constructor)]
-    pub fn new(index_zip: &[u8], lang: &str) -> std::result::Result<GlossaryIndex, JsValue> {
-        Self::from_zip(index_zip, lang).map_err(to_js_error)
+    pub fn new(
+        index_zip: &[u8],
+        lang: &str,
+        dict_zip: Option<Vec<u8>>,
+    ) -> std::result::Result<GlossaryIndex, JsValue> {
+        Self::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)
     }
 
     /// Builds an in-memory index from a zip archive.
@@ -63,15 +74,15 @@ impl GlossaryIndex {
     pub fn from_zip_bytes(
         index_zip: &[u8],
         lang: &str,
+        dict_zip: Option<Vec<u8>>,
     ) -> std::result::Result<GlossaryIndex, JsValue> {
-        Self::from_zip(index_zip, lang).map_err(to_js_error)
+        Self::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)
     }
 
     /// Queries the in-memory index and returns an array of hits.
     ///
     /// Set `inverse` to `true` to search target text and return target-to-source
-    /// hits. Inverse CJK searches require tokenizer support that is not bundled
-    /// into this lightweight WASM crate.
+    /// hits.
     pub fn query(
         &self,
         query: &str,
@@ -84,10 +95,16 @@ impl GlossaryIndex {
 }
 
 impl GlossaryIndex {
-    fn from_zip(index_zip: &[u8], lang: &str) -> Result<GlossaryIndex> {
+    fn from_zip(index_zip: &[u8], lang: &str, dict_zip: Option<Vec<u8>>) -> Result<GlossaryIndex> {
         validate_path_segment(lang, "lang")?;
         let directory = load_zip_into_ram_directory(index_zip, lang)?;
         let index = Index::open(directory).context("failed to open index from zip bytes")?;
+        if let Some(dict_bytes) = dict_zip {
+            let dict = dictionary::load_dictionary_from_zip(&dict_bytes)
+                .context("failed to load dictionary from zip bytes")?;
+            tokenizer::register_tokenizer(&index, lang, &dict)
+                .context("failed to register tokenizer from dictionary")?;
+        }
         let schema = index.schema();
         let fields = fields_from_schema(&schema)?;
         let reader = index.reader().context("failed to create index reader")?;
@@ -96,7 +113,6 @@ impl GlossaryIndex {
             index,
             reader,
             fields,
-            lang: lang.to_owned(),
         })
     }
 
@@ -106,13 +122,6 @@ impl GlossaryIndex {
         }
         if limit == 0 {
             bail!("limit must be at least 1");
-        }
-        if inverse && target_tokenizer_name(&self.lang) != "default" {
-            bail!(
-                "inverse queries for {} require the {} tokenizer, which is not bundled in packtrans-glossary-wasm",
-                self.lang,
-                target_tokenizer_name(&self.lang)
-            );
         }
 
         let search_field = if inverse {
@@ -186,8 +195,9 @@ pub fn query(
     query: &str,
     limit: usize,
     inverse: bool,
+    dict_zip: Option<Vec<u8>>,
 ) -> std::result::Result<JsValue, JsValue> {
-    let index = GlossaryIndex::from_zip(index_zip, lang).map_err(to_js_error)?;
+    let index = GlossaryIndex::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)?;
     index.query(query, limit, inverse)
 }
 
@@ -271,18 +281,6 @@ fn stored_text(doc: &TantivyDocument, field: Field) -> &str {
         .unwrap_or("")
 }
 
-fn target_tokenizer_name(target_language: &str) -> &'static str {
-    if target_language == "lzh" || target_language.starts_with("zh") {
-        "lindera-jieba"
-    } else if target_language.starts_with("ja") {
-        "lindera-ipadic"
-    } else if target_language.starts_with("ko") {
-        "lindera-ko-dic"
-    } else {
-        "default"
-    }
-}
-
 fn validate_path_segment(value: &str, kind: &str) -> Result<()> {
     if value.is_empty() {
         bail!("{kind} must not be empty");
@@ -322,7 +320,7 @@ mod tests {
     #[test]
     fn queries_index_zip_with_language_root() {
         let zip_bytes = build_test_index_zip("fr_fr");
-        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr").unwrap();
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
 
         let hits = index.search("Cooking Pot", 10, false).unwrap();
 
@@ -336,7 +334,7 @@ mod tests {
     #[test]
     fn supports_inverse_query_for_default_tokenizer_languages() {
         let zip_bytes = build_test_index_zip("fr_fr");
-        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr").unwrap();
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
 
         let hits = index.search("Marmite", 10, true).unwrap();
 
@@ -348,13 +346,26 @@ mod tests {
     }
 
     #[test]
-    fn rejects_inverse_cjk_query_without_bundled_tokenizer() {
+    fn supports_inverse_query_for_zh_cn_without_dictionary() {
         let zip_bytes = build_test_index_zip("zh_cn");
-        let index = GlossaryIndex::from_zip(&zip_bytes, "zh_cn").unwrap();
+        let index = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", None).unwrap();
 
-        let err = index.search("厨锅", 10, true).unwrap_err().to_string();
+        let hits = index.search("厨锅", 10, true).unwrap();
 
-        assert!(err.contains("lindera-jieba tokenizer"));
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].source, "厨锅");
+        assert_eq!(hits[0].target, "Cooking Pot");
+    }
+
+    #[test]
+    fn rejects_invalid_dictionary_zip_at_construction() {
+        let zip_bytes = build_test_index_zip("zh_cn");
+        let err = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", Some(vec![1, 2, 3]))
+            .err()
+            .expect("expected dictionary load to fail")
+            .to_string();
+
+        assert!(err.contains("dictionary"));
     }
 
     #[test]
@@ -370,7 +381,7 @@ mod tests {
                 .expect("exists check")
         );
 
-        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr").unwrap();
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
         let hits = index.search("Cooking Pot", 10, false).unwrap();
         assert_eq!(hits.len(), 1);
     }
