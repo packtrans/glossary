@@ -1,0 +1,18 @@
+{
+  "name": "packtrans-glossary-wasm-tests",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "build:wasm": "wasm-pack build --target nodejs --out-dir ../../wasm/pkg ../crates/packtrans-glossary-wasm",
+    "pretest": "pnpm run build:wasm",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "fflate": "^0.8.2",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

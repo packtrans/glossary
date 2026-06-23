@@ -3,6 +3,13 @@
 //! This crate never downloads index assets. JavaScript should fetch the release
 //! asset or other index archive and pass its bytes into [`GlossaryIndex`].
 
+mod dictionary;
+mod lindera_tantivy;
+mod tokenizer;
+
+#[cfg(test)]
+mod test_fixtures;
+
 use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 
@@ -44,7 +51,6 @@ pub struct GlossaryIndex {
     index: Index,
     reader: IndexReader,
     fields: Fields,
-    lang: String,
 }
 
 #[wasm_bindgen]
@@ -53,9 +59,17 @@ impl GlossaryIndex {
     ///
     /// The archive may contain Tantivy files at its root or under a `{lang}/`
     /// directory, matching PackTrans release assets.
+    ///
+    /// Pass optional `dict_zip` bytes to register a Lindera tokenizer for
+    /// inverse queries on indexes that use one. When omitted, the default
+    /// tokenizer is used.
     #[wasm_bindgen(constructor)]
-    pub fn new(index_zip: &[u8], lang: &str) -> std::result::Result<GlossaryIndex, JsValue> {
-        Self::from_zip(index_zip, lang).map_err(to_js_error)
+    pub fn new(
+        index_zip: &[u8],
+        lang: &str,
+        dict_zip: Option<Vec<u8>>,
+    ) -> std::result::Result<GlossaryIndex, JsValue> {
+        Self::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)
     }
 
     /// Builds an in-memory index from a zip archive.
@@ -63,15 +77,15 @@ impl GlossaryIndex {
     pub fn from_zip_bytes(
         index_zip: &[u8],
         lang: &str,
+        dict_zip: Option<Vec<u8>>,
     ) -> std::result::Result<GlossaryIndex, JsValue> {
-        Self::from_zip(index_zip, lang).map_err(to_js_error)
+        Self::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)
     }
 
     /// Queries the in-memory index and returns an array of hits.
     ///
     /// Set `inverse` to `true` to search target text and return target-to-source
-    /// hits. Inverse CJK searches require tokenizer support that is not bundled
-    /// into this lightweight WASM crate.
+    /// hits.
     pub fn query(
         &self,
         query: &str,
@@ -84,10 +98,16 @@ impl GlossaryIndex {
 }
 
 impl GlossaryIndex {
-    fn from_zip(index_zip: &[u8], lang: &str) -> Result<GlossaryIndex> {
+    fn from_zip(index_zip: &[u8], lang: &str, dict_zip: Option<Vec<u8>>) -> Result<GlossaryIndex> {
         validate_path_segment(lang, "lang")?;
         let directory = load_zip_into_ram_directory(index_zip, lang)?;
         let index = Index::open(directory).context("failed to open index from zip bytes")?;
+        if let Some(dict_bytes) = dict_zip {
+            let dict = dictionary::load_dictionary_from_zip(&dict_bytes)
+                .context("failed to load dictionary from zip bytes")?;
+            tokenizer::register_tokenizer(&index, lang, &dict)
+                .context("failed to register tokenizer from dictionary")?;
+        }
         let schema = index.schema();
         let fields = fields_from_schema(&schema)?;
         let reader = index.reader().context("failed to create index reader")?;
@@ -96,7 +116,6 @@ impl GlossaryIndex {
             index,
             reader,
             fields,
-            lang: lang.to_owned(),
         })
     }
 
@@ -106,13 +125,6 @@ impl GlossaryIndex {
         }
         if limit == 0 {
             bail!("limit must be at least 1");
-        }
-        if inverse && target_tokenizer_name(&self.lang) != "default" {
-            bail!(
-                "inverse queries for {} require the {} tokenizer, which is not bundled in packtrans-glossary-wasm",
-                self.lang,
-                target_tokenizer_name(&self.lang)
-            );
         }
 
         let search_field = if inverse {
@@ -186,8 +198,9 @@ pub fn query(
     query: &str,
     limit: usize,
     inverse: bool,
+    dict_zip: Option<Vec<u8>>,
 ) -> std::result::Result<JsValue, JsValue> {
-    let index = GlossaryIndex::from_zip(index_zip, lang).map_err(to_js_error)?;
+    let index = GlossaryIndex::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)?;
     index.query(query, limit, inverse)
 }
 
@@ -271,18 +284,6 @@ fn stored_text(doc: &TantivyDocument, field: Field) -> &str {
         .unwrap_or("")
 }
 
-fn target_tokenizer_name(target_language: &str) -> &'static str {
-    if target_language == "lzh" || target_language.starts_with("zh") {
-        "lindera-jieba"
-    } else if target_language.starts_with("ja") {
-        "lindera-ipadic"
-    } else if target_language.starts_with("ko") {
-        "lindera-ko-dic"
-    } else {
-        "default"
-    }
-}
-
 fn validate_path_segment(value: &str, kind: &str) -> Result<()> {
     if value.is_empty() {
         bail!("{kind} must not be empty");
@@ -303,26 +304,12 @@ fn to_js_error(error: impl std::fmt::Display) -> JsValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-    use std::io::{self, BufWriter, Write};
-    use std::path::PathBuf;
-    use std::sync::{Arc, Mutex};
-
-    use tantivy::schema::{STORED, Schema, TEXT};
-    use tantivy::{
-        IndexSettings, TantivyDocument,
-        directory::{
-            AntiCallToken, DirectoryLock, FileHandle, Lock, TerminatingWrite, WatchCallback,
-            WatchHandle, WritePtr,
-            error::{DeleteError, LockError, OpenReadError, OpenWriteError},
-        },
-    };
-    use zip::write::SimpleFileOptions;
+    use crate::test_fixtures;
 
     #[test]
     fn queries_index_zip_with_language_root() {
-        let zip_bytes = build_test_index_zip("fr_fr");
-        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr").unwrap();
+        let zip_bytes = test_fixtures::build_index_zip("fr_fr");
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
 
         let hits = index.search("Cooking Pot", 10, false).unwrap();
 
@@ -335,8 +322,8 @@ mod tests {
 
     #[test]
     fn supports_inverse_query_for_default_tokenizer_languages() {
-        let zip_bytes = build_test_index_zip("fr_fr");
-        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr").unwrap();
+        let zip_bytes = test_fixtures::build_index_zip("fr_fr");
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
 
         let hits = index.search("Marmite", 10, true).unwrap();
 
@@ -348,13 +335,26 @@ mod tests {
     }
 
     #[test]
-    fn rejects_inverse_cjk_query_without_bundled_tokenizer() {
-        let zip_bytes = build_test_index_zip("zh_cn");
-        let index = GlossaryIndex::from_zip(&zip_bytes, "zh_cn").unwrap();
+    fn supports_inverse_query_for_zh_cn_without_dictionary() {
+        let zip_bytes = test_fixtures::build_index_zip("zh_cn");
+        let index = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", None).unwrap();
 
-        let err = index.search("厨锅", 10, true).unwrap_err().to_string();
+        let hits = index.search("厨锅", 10, true).unwrap();
 
-        assert!(err.contains("lindera-jieba tokenizer"));
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].source, "厨锅");
+        assert_eq!(hits[0].target, "Cooking Pot");
+    }
+
+    #[test]
+    fn rejects_invalid_dictionary_zip_at_construction() {
+        let zip_bytes = test_fixtures::build_index_zip("zh_cn");
+        let err = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", Some(vec![1, 2, 3]))
+            .err()
+            .expect("expected dictionary load to fail")
+            .to_string();
+
+        assert!(err.contains("dictionary"));
     }
 
     #[test]
@@ -362,7 +362,7 @@ mod tests {
         assert!(should_skip_index_entry(Path::new(".tantivy-meta.lock")));
         assert!(!should_skip_index_entry(Path::new("meta.json")));
 
-        let zip_bytes = build_test_index_zip_with_lock("fr_fr");
+        let zip_bytes = test_fixtures::build_index_zip_with_lock("fr_fr");
         let directory = load_zip_into_ram_directory(&zip_bytes, "fr_fr").unwrap();
         assert!(
             !directory
@@ -370,184 +370,8 @@ mod tests {
                 .expect("exists check")
         );
 
-        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr").unwrap();
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
         let hits = index.search("Cooking Pot", 10, false).unwrap();
         assert_eq!(hits.len(), 1);
-    }
-
-    fn build_test_index_zip_with_lock(lang: &str) -> Vec<u8> {
-        let zip_bytes = build_test_index_zip(lang);
-        add_file_to_zip(zip_bytes, &format!("{lang}/.tantivy-meta.lock"), &[])
-    }
-
-    fn add_file_to_zip(mut zip_bytes: Vec<u8>, entry_name: &str, data: &[u8]) -> Vec<u8> {
-        let cursor = Cursor::new(std::mem::take(&mut zip_bytes));
-        let mut archive = ZipArchive::new(cursor).unwrap();
-        let output = Cursor::new(Vec::new());
-        let mut writer = zip::ZipWriter::new(output);
-
-        for index in 0..archive.len() {
-            let mut entry = archive.by_index(index).unwrap();
-            let existing_name = entry.name().to_string();
-            writer
-                .start_file(&existing_name, SimpleFileOptions::default())
-                .unwrap();
-            std::io::copy(&mut entry, &mut writer).unwrap();
-        }
-
-        writer
-            .start_file(entry_name, SimpleFileOptions::default())
-            .unwrap();
-        writer.write_all(data).unwrap();
-        writer.finish().unwrap().into_inner()
-    }
-
-    fn build_test_index_zip(lang: &str) -> Vec<u8> {
-        let mut builder = Schema::builder();
-        let fields = Fields {
-            mod_id: builder.add_text_field("mod_id", STORED),
-            key: builder.add_text_field("key", STORED),
-            source_lang: builder.add_text_field("source_lang", STORED),
-            source_text: builder.add_text_field("source_text", TEXT | STORED),
-            target_lang: builder.add_text_field("target_lang", STORED),
-            target_text: builder.add_text_field("target_text", TEXT | STORED),
-        };
-        let schema = builder.build();
-        let ram_dir = RamDirectory::create();
-        let index = Index::create(ram_dir.clone(), schema, IndexSettings::default()).unwrap();
-        let mut writer = index.writer(50_000_000).unwrap();
-        let mut doc = TantivyDocument::default();
-        doc.add_text(fields.mod_id, "farmersdelight");
-        doc.add_text(fields.key, "block.farmersdelight.cooking_pot");
-        doc.add_text(fields.source_lang, "en_us");
-        doc.add_text(fields.source_text, "Cooking Pot");
-        doc.add_text(fields.target_lang, lang);
-        doc.add_text(
-            fields.target_text,
-            if lang == "zh_cn" { "厨锅" } else { "Marmite" },
-        );
-        writer.add_document(doc).unwrap();
-        writer.commit().unwrap();
-        drop(writer);
-
-        let recording_dir = RecordingDirectory::default();
-        ram_dir.persist(&recording_dir).unwrap();
-        zip_index_files(&recording_dir.files(), lang)
-    }
-
-    fn zip_index_files(files: &HashMap<PathBuf, Vec<u8>>, lang: &str) -> Vec<u8> {
-        let cursor = Cursor::new(Vec::new());
-        let mut writer = zip::ZipWriter::new(cursor);
-        let mut paths = files.keys().collect::<Vec<_>>();
-        paths.sort();
-        for path in paths {
-            let name = Path::new(lang)
-                .join(path)
-                .to_string_lossy()
-                .replace('\\', "/");
-            writer
-                .start_file(name, SimpleFileOptions::default())
-                .unwrap();
-            writer.write_all(&files[path]).unwrap();
-        }
-        writer.finish().unwrap().into_inner()
-    }
-
-    #[derive(Clone, Debug, Default)]
-    struct RecordingDirectory {
-        files: Arc<Mutex<HashMap<PathBuf, Vec<u8>>>>,
-    }
-
-    impl RecordingDirectory {
-        fn files(&self) -> HashMap<PathBuf, Vec<u8>> {
-            self.files.lock().unwrap().clone()
-        }
-    }
-
-    impl Directory for RecordingDirectory {
-        fn get_file_handle(
-            &self,
-            path: &Path,
-        ) -> std::result::Result<Arc<dyn FileHandle>, OpenReadError> {
-            panic!(
-                "unexpected read from recording directory: {}",
-                path.display()
-            )
-        }
-
-        fn delete(&self, path: &Path) -> std::result::Result<(), DeleteError> {
-            panic!(
-                "unexpected delete from recording directory: {}",
-                path.display()
-            )
-        }
-
-        fn exists(&self, path: &Path) -> std::result::Result<bool, OpenReadError> {
-            Ok(self.files.lock().unwrap().contains_key(path))
-        }
-
-        fn open_write(&self, path: &Path) -> std::result::Result<WritePtr, OpenWriteError> {
-            Ok(BufWriter::new(Box::new(RecordingWriter {
-                path: path.to_path_buf(),
-                files: Arc::clone(&self.files),
-                data: Vec::new(),
-            })))
-        }
-
-        fn atomic_read(&self, path: &Path) -> std::result::Result<Vec<u8>, OpenReadError> {
-            self.files
-                .lock()
-                .unwrap()
-                .get(path)
-                .cloned()
-                .ok_or_else(|| OpenReadError::FileDoesNotExist(path.to_path_buf()))
-        }
-
-        fn atomic_write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-            self.files
-                .lock()
-                .unwrap()
-                .insert(path.to_path_buf(), data.to_vec());
-            Ok(())
-        }
-
-        fn sync_directory(&self) -> io::Result<()> {
-            Ok(())
-        }
-
-        fn acquire_lock(&self, _lock: &Lock) -> std::result::Result<DirectoryLock, LockError> {
-            panic!("unexpected lock from recording directory")
-        }
-
-        fn watch(&self, _watch_callback: WatchCallback) -> tantivy::Result<WatchHandle> {
-            panic!("unexpected watch from recording directory")
-        }
-    }
-
-    struct RecordingWriter {
-        path: PathBuf,
-        files: Arc<Mutex<HashMap<PathBuf, Vec<u8>>>>,
-        data: Vec<u8>,
-    }
-
-    impl Write for RecordingWriter {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.data.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            self.files
-                .lock()
-                .unwrap()
-                .insert(self.path.clone(), self.data.clone());
-            Ok(())
-        }
-    }
-
-    impl TerminatingWrite for RecordingWriter {
-        fn terminate_ref(&mut self, _: AntiCallToken) -> io::Result<()> {
-            self.flush()
-        }
     }
 }

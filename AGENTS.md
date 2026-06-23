@@ -24,6 +24,14 @@ cargo clippy         # Lint
 cargo fmt -- --check # Format check
 ```
 
+WASM Node.js tests (Vitest; requires CLI index/dict cache — see `wasm/README.md`):
+
+```sh
+packtrans-glossary index download --lang zh_cn
+packtrans-glossary dict download lindera-jieba
+cd wasm && pnpm install && pnpm test
+```
+
 ## Running the CLIs
 
 The builder has three subcommands: `index` (build a Tantivy index from language files), `create-mod-list` (fetch mod lists from APIs), and `download` (download mod jar language files from Modrinth/CurseForge/Minecraft).

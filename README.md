@@ -212,6 +212,39 @@ packtrans-glossary dict clean
 
 Available dictionaries: `lindera-ipadic` (Japanese), `lindera-ko-dic` (Korean), `lindera-jieba` (Chinese).
 
+## WASM (`@packtrans/glossary`)
+
+The `packtrans-glossary-wasm` crate is published as [`@packtrans/glossary`](https://github.com/packtrans/glossary/pkgs/npm/glossary) for browser use. JavaScript fetches index zip bytes (and optionally a Lindera dictionary zip) and passes them into the WASM bindings.
+
+```ts
+import init, { GlossaryIndex } from "@packtrans/glossary";
+
+await init();
+
+const indexZip = await fetch(indexUrl).then((r) => r.arrayBuffer());
+
+// Forward query (default tokenizer)
+const index = new GlossaryIndex(new Uint8Array(indexZip), "zh_cn");
+const hits = index.query("Cooking Pot", 10, false);
+
+// Inverse query with a Lindera dictionary fetched by JS
+const dictUrl =
+  "https://github.com/lindera/lindera/releases/download/v2.3.4/lindera-jieba-2.3.4.zip";
+const dictZip = await fetch(dictUrl).then((r) => r.arrayBuffer());
+const inverseIndex = new GlossaryIndex(
+  new Uint8Array(indexZip),
+  "zh_cn",
+  new Uint8Array(dictZip),
+);
+const inverseHits = inverseIndex.query("厨锅", 10, true);
+```
+
+- `dictZip` is optional. When provided at construction, WASM loads the dictionary and registers the matching Lindera tokenizer. When omitted, the default tokenizer is used.
+- Dictionary release archives use the same Lindera URLs as `packtrans-glossary dict download`.
+- `inverse=true` searches target-language text and returns source-language results (same semantics as the CLI `--inverse` flag).
+
+Node.js integration tests live in [`wasm/`](wasm/README.md) (Vitest + `wasm-pack` nodejs target). They read the CLI-managed index and dictionary caches; download `zh_cn` and `lindera-jieba` before running `pnpm test`.
+
 ## Query Output
 
 Results are displayed in a tab-separated format sorted by confidence (Tantivy score):

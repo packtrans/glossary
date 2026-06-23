@@ -1,3 +1,5 @@
 target
 /indexes/
 /res/
+/pkg/
+crates/packtrans-glossary-wasm/pkg/

@@ -12,9 +12,14 @@ wasm-opt = ["-O", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
 [dependencies]
 anyhow.workspace = true
 getrandom = { version = "0.2", features = ["js"] }
+lindera = { version = "2", default-features = false, features = ["compress"] }
+lindera-dictionary = { version = "2", default-features = false, features = ["compress"] }
+rkyv = "0.8"
 serde.workspace = true
+serde_json.workspace = true
 serde-wasm-bindgen = "0.6.5"
 tantivy = { version = "0.25", default-features = false, features = ["lz4-compression", "columnar-zstd-compression"] }
+tantivy-tokenizer-api = "0.6"
 uuid = { version = "1.23.2", features = ["js"] }
 wasm-bindgen = "0.2.122"
 zip = { version = "2", default-features = false, features = ["deflate"] }
