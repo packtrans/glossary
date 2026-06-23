@@ -27,7 +27,7 @@ function resolveDataDir(): string {
     return process.env.XDG_DATA_HOME;
   }
   return join(homedir(), ".local", "share");
-
+}
 
 function indexesRoot(): string {
   return join(resolveDataDir(), "packtrans-glossary", "indexes");
