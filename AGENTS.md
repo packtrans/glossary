@@ -24,9 +24,11 @@ cargo clippy         # Lint
 cargo fmt -- --check # Format check
 ```
 
-WASM Node.js tests (Vitest):
+WASM Node.js tests (Vitest; requires CLI index/dict cache — see `wasm/README.md`):
 
 ```sh
+packtrans-glossary index download --lang zh_cn
+packtrans-glossary dict download lindera-jieba
 cd wasm && npm install && npm test
 ```
 

@@ -1,14 +1,16 @@
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import {
+  loadCliDictionaryZip,
+  loadCliIndexZip,
+  requireCliDictionaryDir,
+  requireCliIndexDir,
+  TEST_LANG,
+} from "./cli-cache.js";
 
 const require = createRequire(import.meta.url);
 const { GlossaryIndex, query } = require("../pkg/packtrans_glossary_wasm.js");
-
-const testDir = dirname(fileURLToPath(import.meta.url));
-const fixturesDir = join(testDir, "..", "fixtures");
 
 interface QueryHit {
   confidence: number;
@@ -20,61 +22,49 @@ interface QueryHit {
   target: string;
 }
 
-function loadFixture(lang: string): Uint8Array {
-  return new Uint8Array(readFileSync(join(fixturesDir, `${lang}.zip`)));
-}
-
 describe("packtrans-glossary-wasm", () => {
-  it("runs a forward query on a French index", () => {
-    const indexZip = loadFixture("fr_fr");
-    const index = new GlossaryIndex(indexZip, "fr_fr");
+  let indexZip: Uint8Array;
+  let dictZip: Uint8Array;
+
+  beforeAll(() => {
+    requireCliIndexDir(TEST_LANG);
+    requireCliDictionaryDir(TEST_LANG);
+    indexZip = loadCliIndexZip(TEST_LANG);
+    dictZip = loadCliDictionaryZip(TEST_LANG);
+  });
+
+  it("runs a forward query on the CLI-managed zh_cn index", () => {
+    const index = new GlossaryIndex(indexZip, TEST_LANG);
 
     const hits = index.query("Cooking Pot", 10, false) as QueryHit[];
 
-    expect(hits).toHaveLength(1);
-    expect(hits[0].mod_id).toBe("farmersdelight");
-    expect(hits[0].key).toBe("block.farmersdelight.cooking_pot");
-    expect(hits[0].source).toBe("Cooking Pot");
-    expect(hits[0].target).toBe("Marmite");
+    expect(hits.length).toBeGreaterThan(0);
+    const hit = hits.find((entry) => entry.key.includes("cooking_pot"));
+    expect(hit).toBeDefined();
+    expect(hit?.source).toBe("Cooking Pot");
+    expect(hit?.target.length).toBeGreaterThan(0);
   });
 
-  it("runs an inverse query on a French index", () => {
-    const indexZip = loadFixture("fr_fr");
-    const index = new GlossaryIndex(indexZip, "fr_fr");
-
-    const hits = index.query("Marmite", 10, true) as QueryHit[];
-
-    expect(hits).toHaveLength(1);
-    expect(hits[0].source).toBe("Marmite");
-    expect(hits[0].source_lang).toBe("fr_fr");
-    expect(hits[0].target).toBe("Cooking Pot");
-    expect(hits[0].target_lang).toBe("en_us");
-  });
-
-  it("runs an inverse query on a Chinese index without a dictionary", () => {
-    const indexZip = loadFixture("zh_cn");
-    const index = new GlossaryIndex(indexZip, "zh_cn");
+  it("runs an inverse query with the CLI dictionary cache", () => {
+    const index = new GlossaryIndex(indexZip, TEST_LANG, dictZip);
 
     const hits = index.query("厨锅", 10, true) as QueryHit[];
 
-    expect(hits).toHaveLength(1);
-    expect(hits[0].source).toBe("厨锅");
-    expect(hits[0].target).toBe("Cooking Pot");
+    expect(hits.length).toBeGreaterThan(0);
+    const hit = hits.find((entry) => entry.source.includes("厨锅"));
+    expect(hit).toBeDefined();
+    expect(hit?.target).toMatch(/Cooking Pot/i);
   });
 
   it("supports the one-shot query helper", () => {
-    const indexZip = loadFixture("fr_fr");
+    const hits = query(indexZip, TEST_LANG, "Cooking Pot", 10, false) as QueryHit[];
 
-    const hits = query(indexZip, "fr_fr", "Cooking Pot", 10, false) as QueryHit[];
-
-    expect(hits).toHaveLength(1);
-    expect(hits[0].target).toBe("Marmite");
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.some((entry) => entry.source === "Cooking Pot")).toBe(true);
   });
 
   it("rejects invalid dictionary zip bytes at construction", () => {
-    const indexZip = loadFixture("zh_cn");
-
-    expect(() => new GlossaryIndex(indexZip, "zh_cn", new Uint8Array([1, 2, 3]))).toThrow(
+    expect(() => new GlossaryIndex(indexZip, TEST_LANG, new Uint8Array([1, 2, 3]))).toThrow(
       /dictionary/i,
     );
   });

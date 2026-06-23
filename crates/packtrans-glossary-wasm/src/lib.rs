@@ -7,8 +7,8 @@ mod dictionary;
 mod lindera_tantivy;
 mod tokenizer;
 
-#[cfg(any(test, feature = "export-fixtures"))]
-pub mod test_fixtures;
+#[cfg(test)]
+mod test_fixtures;
 
 use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
