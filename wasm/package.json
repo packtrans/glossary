@@ -2,9 +2,10 @@
   "name": "packtrans-glossary-wasm-tests",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.12.1",
   "scripts": {
     "build:wasm": "wasm-pack build --target nodejs --out-dir ../../wasm/pkg ../crates/packtrans-glossary-wasm",
-    "pretest": "npm run build:wasm",
+    "pretest": "pnpm run build:wasm",
     "test": "vitest run",
     "test:watch": "vitest"
   },

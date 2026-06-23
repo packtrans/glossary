@@ -22,8 +22,8 @@ On Linux the default cache root is `~/.local/share/packtrans-glossary/` (`$XDG_D
 
 ```bash
 cd wasm
-npm install
-npm test
+pnpm install
+pnpm test
 ```
 
-`npm test` runs `wasm-pack build --target nodejs` into `wasm/pkg/` before executing Vitest.
+`pnpm test` runs `wasm-pack build --target nodejs` into `wasm/pkg/` before executing Vitest.

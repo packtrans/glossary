@@ -29,7 +29,7 @@ WASM Node.js tests (Vitest; requires CLI index/dict cache — see `wasm/README.m
 ```sh
 packtrans-glossary index download --lang zh_cn
 packtrans-glossary dict download lindera-jieba
-cd wasm && npm install && npm test
+cd wasm && pnpm install && pnpm test
 ```
 
 ## Running the CLIs
