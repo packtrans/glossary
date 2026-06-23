@@ -13,9 +13,6 @@ const DICTIONARY_BY_LANG: Record<string, string> = {
 };
 
 function resolveDataDir(): string {
-  if (process.env.XDG_DATA_HOME) {
-    return process.env.XDG_DATA_HOME;
-  }
   if (process.platform === "darwin") {
     return join(homedir(), "Library", "Application Support");
   }
@@ -26,8 +23,11 @@ function resolveDataDir(): string {
     }
     return localAppData;
   }
+  if (process.env.XDG_DATA_HOME) {
+    return process.env.XDG_DATA_HOME;
+  }
   return join(homedir(), ".local", "share");
-}
+
 
 function indexesRoot(): string {
   return join(resolveDataDir(), "packtrans-glossary", "indexes");
