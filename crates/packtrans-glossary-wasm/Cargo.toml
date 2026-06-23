@@ -6,6 +6,14 @@ edition.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+export-fixtures = []
+
+[[bin]]
+name = "export-fixtures"
+path = "src/bin/export-fixtures.rs"
+required-features = ["export-fixtures"]
+
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-O", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
 

@@ -1,0 +1,17 @@
+{
+  "name": "packtrans-glossary-wasm-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "wasm-pack build --target nodejs --out-dir ../../wasm/pkg ../crates/packtrans-glossary-wasm",
+    "generate:fixtures": "cargo run -p packtrans-glossary-wasm --features export-fixtures --bin export-fixtures",
+    "pretest": "npm run build:wasm",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

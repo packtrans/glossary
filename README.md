@@ -243,6 +243,8 @@ const inverseHits = inverseIndex.query("厨锅", 10, true);
 - Dictionary release archives use the same Lindera URLs as `packtrans-glossary dict download`.
 - `inverse=true` searches target-language text and returns source-language results (same semantics as the CLI `--inverse` flag).
 
+Node.js integration tests live in [`wasm/`](wasm/README.md) (Vitest + `wasm-pack` nodejs target).
+
 ## Query Output
 
 Results are displayed in a tab-separated format sorted by confidence (Tantivy score):

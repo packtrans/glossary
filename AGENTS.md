@@ -24,6 +24,12 @@ cargo clippy         # Lint
 cargo fmt -- --check # Format check
 ```
 
+WASM Node.js tests (Vitest):
+
+```sh
+cd wasm && npm install && npm test
+```
+
 ## Running the CLIs
 
 The builder has three subcommands: `index` (build a Tantivy index from language files), `create-mod-list` (fetch mod lists from APIs), and `download` (download mod jar language files from Modrinth/CurseForge/Minecraft).
