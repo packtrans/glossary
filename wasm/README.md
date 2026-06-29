@@ -16,7 +16,7 @@ cargo build --release --bin packtrans-glossary
 ./target/release/packtrans-glossary dict download lindera-jieba
 ```
 
-On Linux the default cache root is `~/.local/share/packtrans-glossary/` (`$XDG_DATA_HOME/packtrans-glossary/` when set).
+On Unix (including macOS) the default cache root is `~/.local/share/packtrans-glossary/` (`$XDG_DATA_HOME/packtrans-glossary/` when set).
 
 ## Commands
 

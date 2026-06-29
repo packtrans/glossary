@@ -9,19 +9,19 @@ use anyhow::{Context, Result, bail};
 pub const MAX_DOWNLOAD_BYTES: usize = 500 * 1024 * 1024;
 
 /// Returns the platform-specific user data directory.
+///
+/// On Unix (including macOS), follows the [XDG Base Directory Specification]:
+/// `$XDG_DATA_HOME`, or `$HOME/.local/share` when unset.
+///
+/// [XDG Base Directory Specification]: https://specifications.freedesktop.org/basedir-spec/latest/
 pub fn data_dir() -> Result<PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        let home = std::env::var("HOME").context("HOME environment variable not set")?;
-        Ok(PathBuf::from(home).join("Library/Application Support"))
-    }
     #[cfg(target_os = "windows")]
     {
         std::env::var("LOCALAPPDATA")
             .map(PathBuf::from)
             .context("LOCALAPPDATA environment variable not set")
     }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(not(target_os = "windows"))]
     {
         std::env::var("XDG_DATA_HOME")
             .map(PathBuf::from)
