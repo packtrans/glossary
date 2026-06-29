@@ -13,9 +13,6 @@ const DICTIONARY_BY_LANG: Record<string, string> = {
 };
 
 function resolveDataDir(): string {
-  if (process.platform === "darwin") {
-    return join(homedir(), "Library", "Application Support");
-  }
   if (process.platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA;
     if (!localAppData) {

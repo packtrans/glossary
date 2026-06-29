@@ -56,7 +56,7 @@ $CLI query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 20
 | ------------- | ------------------------------------ |
 | `--dict-path` | Override Lindera dictionary location |
 
-Default data dir: `~/.local/share/packtrans-glossary/indexes/` (Linux), `~/Library/Application Support/packtrans-glossary/indexes/` (macOS), `%LOCALAPPDATA%\packtrans-glossary\indexes\` (Windows).
+Default data dir: `~/.local/share/packtrans-glossary/indexes/` (Unix, including macOS; `$XDG_DATA_HOME/packtrans-glossary/indexes/` when set), `%LOCALAPPDATA%\packtrans-glossary\indexes\` (Windows).
 
 ## Manage release indexes
 
