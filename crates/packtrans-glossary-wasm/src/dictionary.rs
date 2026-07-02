@@ -4,7 +4,6 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use lindera::dictionary::Dictionary;
-use lindera_dictionary::decompress::{CompressedData, decompress};
 use lindera_dictionary::dictionary::character_definition::CharacterDefinition;
 use lindera_dictionary::dictionary::connection_cost_matrix::ConnectionCostMatrix;
 use lindera_dictionary::dictionary::metadata::Metadata;
@@ -20,8 +19,7 @@ pub fn load_dictionary_from_zip(bytes: &[u8]) -> Result<Dictionary> {
 
 fn extract_dictionary_files(bytes: &[u8]) -> Result<HashMap<String, Vec<u8>>> {
     let cursor = Cursor::new(bytes);
-    let mut archive =
-        ZipArchive::new(cursor).context("failed to parse dictionary zip archive")?;
+    let mut archive = ZipArchive::new(cursor).context("failed to parse dictionary zip archive")?;
     let mut entries = Vec::new();
 
     for index in 0..archive.len() {
@@ -88,40 +86,37 @@ fn load_dictionary_from_files(files: &HashMap<String, Vec<u8>>) -> Result<Dictio
 
 fn load_metadata(files: &HashMap<String, Vec<u8>>) -> Result<Metadata> {
     let data = required_file(files, "metadata.json")?;
-    serde_json::from_slice(data).context("failed to deserialize metadata.json")
+    map_lindera(Metadata::load(data))
 }
 
 fn load_character_definition(files: &HashMap<String, Vec<u8>>) -> Result<CharacterDefinition> {
-    let raw_data = required_file(files, "char_def.bin")?.to_vec();
-    let aligned_data = decompress_rkyv_blob(raw_data, "char_def.bin")?;
-    map_lindera(CharacterDefinition::load(&aligned_data))
+    let data = required_file(files, "char_def.bin")?;
+    map_lindera(CharacterDefinition::load(data))
 }
 
 fn load_connection_cost_matrix(files: &HashMap<String, Vec<u8>>) -> Result<ConnectionCostMatrix> {
-    let data = decompress_optional_blob(required_file(files, "matrix.mtx")?, "matrix.mtx")?;
-    Ok(ConnectionCostMatrix::load(data))
+    let data = required_file(files, "matrix.mtx")?;
+    map_lindera(ConnectionCostMatrix::load(data.to_vec()))
 }
 
 fn load_prefix_dictionary(files: &HashMap<String, Vec<u8>>) -> Result<PrefixDictionary> {
-    let da_data = decompress_optional_blob(required_file(files, "dict.da")?, "dict.da")?;
-    let vals_data = decompress_optional_blob(required_file(files, "dict.vals")?, "dict.vals")?;
-    let words_idx_data =
-        decompress_optional_blob(required_file(files, "dict.wordsidx")?, "dict.wordsidx")?;
-    let words_data = decompress_optional_blob(required_file(files, "dict.words")?, "dict.words")?;
+    let da_data = required_file(files, "dict.da")?;
+    let vals_data = required_file(files, "dict.vals")?;
+    let words_idx_data = required_file(files, "dict.wordsidx")?;
+    let words_data = required_file(files, "dict.words")?;
 
-    Ok(PrefixDictionary::load(
-        da_data,
-        vals_data,
-        words_idx_data,
-        words_data,
+    map_lindera(PrefixDictionary::load(
+        da_data.to_vec(),
+        vals_data.to_vec(),
+        words_idx_data.to_vec(),
+        words_data.to_vec(),
         true,
     ))
 }
 
 fn load_unknown_dictionary(files: &HashMap<String, Vec<u8>>) -> Result<UnknownDictionary> {
-    let raw_data = required_file(files, "unk.bin")?.to_vec();
-    let aligned_data = decompress_rkyv_blob(raw_data, "unk.bin")?;
-    map_lindera(UnknownDictionary::load(&aligned_data))
+    let data = required_file(files, "unk.bin")?;
+    map_lindera(UnknownDictionary::load(data))
 }
 
 fn required_file<'a>(files: &'a HashMap<String, Vec<u8>>, name: &str) -> Result<&'a [u8]> {
@@ -129,39 +124,6 @@ fn required_file<'a>(files: &'a HashMap<String, Vec<u8>>, name: &str) -> Result<
         .get(name)
         .map(Vec::as_slice)
         .with_context(|| format!("dictionary zip missing required file: {name}"))
-}
-
-fn decompress_optional_blob(data: &[u8], label: &str) -> Result<Vec<u8>> {
-    let mut aligned = rkyv::util::AlignedVec::<16>::new();
-    aligned.extend_from_slice(data);
-
-    let compressed_data: CompressedData =
-        match rkyv::from_bytes::<CompressedData, rkyv::rancor::Error>(&aligned) {
-            Ok(value) => value,
-            Err(_) => return Ok(data.to_vec()),
-        };
-
-    decompress(compressed_data).map_err(|err| {
-        anyhow::anyhow!("failed to decompress {label}: {err}")
-            .context(format!("failed to decompress {label}"))
-    })
-}
-
-fn decompress_rkyv_blob(data: Vec<u8>, label: &str) -> Result<rkyv::util::AlignedVec<16>> {
-    let mut aligned_data = rkyv::util::AlignedVec::<16>::new();
-    aligned_data.extend_from_slice(&data);
-
-    let compressed_data: CompressedData =
-        rkyv::from_bytes::<CompressedData, rkyv::rancor::Error>(&aligned_data).map_err(|err| {
-            anyhow::anyhow!("failed to deserialize {label}: {err}")
-        })?;
-
-    let decompressed_data = decompress(compressed_data)
-        .map_err(|err| anyhow::anyhow!("failed to decompress {label}: {err}"))?;
-
-    let mut aligned_decompressed = rkyv::util::AlignedVec::<16>::new();
-    aligned_decompressed.extend_from_slice(&decompressed_data);
-    Ok(aligned_decompressed)
 }
 
 fn map_lindera<T>(result: lindera_dictionary::LinderaResult<T>) -> Result<T> {
@@ -205,7 +167,7 @@ mod tests {
     #[test]
     fn extracts_dictionary_files_from_versioned_zip_root() {
         let zip_bytes = build_dictionary_zip(&[(
-            "lindera-jieba-2.3.4/metadata.json",
+            "lindera-jieba-4.0.0/metadata.json",
             br#"{"dictionary":"jieba"}"#,
         )]);
 
@@ -217,7 +179,9 @@ mod tests {
     #[test]
     fn rejects_dictionary_zip_without_metadata() {
         let zip_bytes = build_dictionary_zip(&[("dict.da", b"data")]);
-        let err = extract_dictionary_files(&zip_bytes).unwrap_err().to_string();
+        let err = extract_dictionary_files(&zip_bytes)
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("metadata.json"));
     }
 

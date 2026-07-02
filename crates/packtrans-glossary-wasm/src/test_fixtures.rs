@@ -10,11 +10,11 @@ use tantivy::directory::{
     WatchCallback, WatchHandle, WritePtr,
     error::{DeleteError, LockError, OpenReadError, OpenWriteError},
 };
-use tantivy::schema::{Schema, STORED, TEXT};
+use tantivy::schema::{STORED, Schema, TEXT};
 use tantivy::{Index, IndexSettings, TantivyDocument};
-use zip::write::SimpleFileOptions;
 use zip::ZipArchive;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 #[derive(Clone, Copy)]
 struct FixtureFields {

@@ -229,7 +229,7 @@ const hits = index.query("Cooking Pot", 10, false);
 
 // Inverse query with a Lindera dictionary fetched by JS
 const dictUrl =
-  "https://github.com/lindera/lindera/releases/download/v2.3.4/lindera-jieba-2.3.4.zip";
+  "https://github.com/lindera/lindera/releases/download/v4.0.0/lindera-jieba-4.0.0.zip";
 const dictZip = await fetch(dictUrl).then((r) => r.arrayBuffer());
 const inverseIndex = new GlossaryIndex(
   new Uint8Array(indexZip),
