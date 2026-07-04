@@ -677,7 +677,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1255,7 +1255,8 @@ dependencies = [
 [[package]]
 name = "lindera-tantivy"
 version = "4.0.0"
-source = "git+https://github.com/lindera/lindera-tantivy?rev=3121ef266e9b15ee4bd567848bb67817ea90a873#3121ef266e9b15ee4bd567848bb67817ea90a873"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26e74ac984981d1960c60647b0bb1b7d882c3e2362e707630a833605579aeca4"
 dependencies = [
  "lindera",
  "tantivy",
@@ -1830,7 +1831,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2259,7 +2260,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
