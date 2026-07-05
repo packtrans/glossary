@@ -1,8 +1,8 @@
 //! Minimal Lindera tokenizer adapter for Tantivy (from `lindera-tantivy`, `from_segmenter` only).
 
 use lindera::segmenter::Segmenter;
-use lindera::tokenizer::Tokenizer as LinderaInnerTokenizer;
 use lindera::token::Token as LinderaToken;
+use lindera::tokenizer::Tokenizer as LinderaInnerTokenizer;
 use tantivy_tokenizer_api::{Token, TokenStream, Tokenizer};
 
 #[derive(Clone)]
