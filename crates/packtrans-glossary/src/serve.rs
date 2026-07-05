@@ -13,6 +13,7 @@ use axum::{
 use clap::Args;
 use serde::Deserialize;
 
+use crate::dict_cache::DictionaryCache;
 use crate::download_guard::DownloadCoordinator;
 use crate::query::{QueryHit, QueryOptions, search_index};
 
@@ -48,6 +49,7 @@ struct AppState {
     index_dir: Option<PathBuf>,
     dict_path: Option<PathBuf>,
     download_guard: Arc<DownloadCoordinator>,
+    dict_cache: DictionaryCache,
 }
 
 #[derive(Deserialize)]
@@ -73,6 +75,7 @@ pub async fn run(cmd: ServeCommand, dict_path: Option<PathBuf>) -> Result<()> {
         index_dir: cmd.index_dir,
         dict_path,
         download_guard: Arc::new(DownloadCoordinator::new()),
+        dict_cache: DictionaryCache::new(),
     });
 
     let app = Router::new()
@@ -130,6 +133,7 @@ async fn handle_query(
         inverse: params.inverse,
         dict_path: state.dict_path.clone(),
         download_guard: Some(Arc::clone(&state.download_guard)),
+        dict_cache: Some(state.dict_cache.clone()),
     };
 
     tokio::task::spawn_blocking(move || search_index(options))

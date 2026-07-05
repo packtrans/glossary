@@ -68,7 +68,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
     let index = Index::create(dir, schema, IndexSettings::default())
         .with_context(|| format!("failed to create index: {}", index_dir.display()))?;
 
-    tokenizer::register_for_language(&index, &options.lang, options.dict_path.as_deref())?;
+    tokenizer::register_for_language(&index, &options.lang, options.dict_path.as_deref(), None)?;
 
     let mut writer = index.writer(50_000_000)?;
 

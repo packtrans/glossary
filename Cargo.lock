@@ -1483,6 +1483,8 @@ dependencies = [
  "axum",
  "clap",
  "indicatif",
+ "lindera",
+ "lru",
  "packtrans-glossary-core",
  "serde",
  "serde_json",

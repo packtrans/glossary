@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 
 mod dict;
+mod dict_cache;
 mod download_guard;
 mod indexes;
 mod progress;
@@ -58,6 +59,7 @@ fn main() -> Result<()> {
                 inverse: cmd.inverse,
                 dict_path: cli.dict_path,
                 download_guard: None,
+                dict_cache: None,
             },
             cmd.json,
         ),

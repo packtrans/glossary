@@ -14,6 +14,7 @@ use tantivy::{
     schema::{Field, Value},
 };
 
+use crate::dict_cache::DictionaryCache;
 use crate::download_guard::DownloadCoordinator;
 use crate::indexes;
 use crate::progress;
@@ -35,6 +36,8 @@ pub struct QueryOptions {
     pub dict_path: Option<PathBuf>,
     /// When set (HTTP server), serializes concurrent downloads for the same resource.
     pub download_guard: Option<Arc<DownloadCoordinator>>,
+    /// When set (HTTP server), reuses loaded Lindera dictionaries across requests.
+    pub dict_cache: Option<DictionaryCache>,
 }
 
 /// A single glossary search hit.
@@ -90,7 +93,16 @@ pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
         options.dict_path.as_deref(),
         options.download_guard.as_deref(),
     )?;
-    tokenizer::register_for_language(&index, &options.lang, options.dict_path.as_deref())?;
+    let cached_dict = match &options.dict_cache {
+        Some(cache) => cache.get_or_load(&options.lang, options.dict_path.as_deref())?,
+        None => None,
+    };
+    tokenizer::register_for_language(
+        &index,
+        &options.lang,
+        options.dict_path.as_deref(),
+        cached_dict.as_ref(),
+    )?;
 
     let schema = index.schema();
     let fields = fields_from_schema(&schema)?;
