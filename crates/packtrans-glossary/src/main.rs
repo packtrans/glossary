@@ -6,6 +6,7 @@ use clap::{Args, Parser, Subcommand};
 mod dict;
 mod dict_cache;
 mod download_guard;
+mod index_cache;
 mod indexes;
 mod progress;
 mod query;
@@ -60,6 +61,7 @@ fn main() -> Result<()> {
                 dict_path: cli.dict_path,
                 download_guard: None,
                 dict_cache: None,
+                index_cache: None,
             },
             cmd.json,
         ),
