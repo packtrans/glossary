@@ -4,6 +4,11 @@ Rust-based CLI tools for indexing and querying Minecraft mod glossary translatio
 
 We have also built a web App based on this repository at [packtrans/glossary-web](https://github.com/packtrans/glossary-web), try it on [https://glossary.packtrans.download](https://glossary.packtrans.download).
 
+
+## Installation
+
+Download pre-built binary from [Releases](https://github.com/packtrans/glossary/releases).
+
 ## Overview
 
 This workspace provides two command-line utilities:
@@ -67,6 +72,7 @@ packtrans-glossary-builder index \
 Writes the Tantivy index to `indexes/zh_cn/` (`--out` is an index root; `--lang` is appended).
 
 **Options:**
+
 - `--scan-dir`, `--lang`, and `--out` are required.
 - `--dict-path` optionally overrides the dictionary storage location (global builder flag).
 - Source language is always `en_us`.
@@ -92,6 +98,7 @@ packtrans-glossary-builder download --platform minecraft --output res
 ```
 
 **Options:**
+
 - `--platform` (`modrinth`, `curseforge`, `minecraft`) and `--output` are required.
 - `--list-file` / `-f` is required for modrinth and curseforge platforms (JSON array of mod entries with `id`, `slug`, `version_id` fields).
 - `--temp-path` optionally specifies where to store temporary download files.
@@ -118,6 +125,7 @@ packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 
 ```
 
 **Options:**
+
 - `--lang` and query text are required.
 - `--index-dir` is an index root; the index at `{index-dir}/{lang}` is used (same layout as `index --out`). When omitted, a release index is downloaded or opened from the default data directory.
 - `--limit` is optional; defaults to `10`.
@@ -127,7 +135,7 @@ packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 
 
 ### HTTP Server
 
-> **Experimental — local use only.** The `serve` command is intended for ad-hoc queries on your own machine (default bind `127.0.0.1`). It is not designed for production use or a large number of parallel requests. For heavy or concurrent workloads, use the `query` CLI instead.
+> The `serve` command is intended for ad-hoc queries on your own machine (default bind `127.0.0.1`). It is not designed for production use or a large number of parallel requests. For heavy or concurrent workloads, use the `query` CLI instead.
 
 Start an HTTP server that exposes glossary search as JSON:
 
@@ -141,12 +149,12 @@ packtrans-glossary serve --host 0.0.0.0 --port 3000 --index-dir indexes
 
 **Endpoint:** `GET /query`
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `lang` | yes | — | Target language code (e.g. `zh_cn`) |
-| `q` or `query` | yes | — | Search text |
-| `limit` | no | `10` | Maximum results (max `50`) |
-| `inverse` | no | `false` | Search target text, return source |
+| Parameter      | Required | Default | Description                         |
+| -------------- | -------- | ------- | ----------------------------------- |
+| `lang`         | yes      | —       | Target language code (e.g. `zh_cn`) |
+| `q` or `query` | yes      | —       | Search text                         |
+| `limit`        | no       | `10`    | Maximum results (max `50`)          |
+| `inverse`      | no       | `false` | Search target text, return source   |
 
 Example:
 
@@ -157,6 +165,7 @@ curl 'http://127.0.0.1:8080/query?lang=zh_cn&q=Cooking+Pot&limit=20&inverse=fals
 Returns a JSON array of hits with `confidence`, `mod_id`, `key`, `source`, `source_lang`, `target_lang`, and `target`. Errors return `{ "error": "..." }` with HTTP 400 (bad request) or 500 (internal error).
 
 **Options:**
+
 - `--host` defaults to `127.0.0.1`.
 - `--port` defaults to `8080`.
 - `--index-dir` is an index root (same layout as `query --index-dir`). When omitted, release indexes are used from the default data directory.
@@ -260,14 +269,14 @@ When `--inverse` is used, the `source` and `target` columns swap semantics (sour
 
 Each indexed document contains the following fields:
 
-| Field        | Type           | Description               |
-|--------------|----------------|---------------------------|
-| `mod_id`     | Stored string  | Mod identifier            |
-| `key`        | Stored string  | Translation key           |
-| `source_lang`| Stored string  | Source language code      |
-| `source_text`| Indexed + stored | Source text (searched)   |
-| `target_lang`| Stored string  | Target language code      |
-| `target_text`| Indexed + stored | Target text (searched in inverse mode) |
+| Field         | Type             | Description                            |
+| ------------- | ---------------- | -------------------------------------- |
+| `mod_id`      | Stored string    | Mod identifier                         |
+| `key`         | Stored string    | Translation key                        |
+| `source_lang` | Stored string    | Source language code                   |
+| `source_text` | Indexed + stored | Source text (searched)                 |
+| `target_lang` | Stored string    | Target language code                   |
+| `target_text` | Indexed + stored | Target text (searched in inverse mode) |
 
 ## Development
 
@@ -316,8 +325,8 @@ cargo run --bin packtrans-glossary -- serve --index-dir indexes
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
+| Variable             | Required                | Description                       |
+| -------------------- | ----------------------- | --------------------------------- |
 | `CURSEFORGE_API_KEY` | For CurseForge commands | API key for CurseForge API access |
 
 ## Future Enhancements

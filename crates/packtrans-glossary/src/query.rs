@@ -1,20 +1,21 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use packtrans_glossary_core::dictionary;
 use packtrans_glossary_core::schema::fields_from_schema;
 use packtrans_glossary_core::{tokenizer, util};
 use serde::Serialize;
 use tantivy::{
-    Index, TantivyDocument,
+    TantivyDocument,
     collector::TopDocs,
-    directory::MmapDirectory,
     query::QueryParser,
     schema::{Field, Value},
 };
 
+use crate::dict_cache::DictionaryCache;
 use crate::download_guard::DownloadCoordinator;
+use crate::index_cache::{self, IndexCache};
 use crate::indexes;
 use crate::progress;
 
@@ -35,6 +36,10 @@ pub struct QueryOptions {
     pub dict_path: Option<PathBuf>,
     /// When set (HTTP server), serializes concurrent downloads for the same resource.
     pub download_guard: Option<Arc<DownloadCoordinator>>,
+    /// When set (HTTP server), reuses loaded Lindera dictionaries across requests.
+    pub dict_cache: Option<DictionaryCache>,
+    /// When set (HTTP server), reuses opened Tantivy indexes across requests.
+    pub index_cache: Option<IndexCache>,
 }
 
 /// A single glossary search hit.
@@ -80,17 +85,27 @@ pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
         options.index_dir.as_deref(),
         options.download_guard.as_deref(),
     )?;
-    let dir = MmapDirectory::open(&index_dir)
-        .with_context(|| format!("failed to open index directory: {}", index_dir.display()))?;
-    let index = Index::open(dir)
-        .with_context(|| format!("failed to open index: {}", index_dir.display()))?;
 
     ensure_tokenizer_dictionary(
         &options.lang,
         options.dict_path.as_deref(),
         options.download_guard.as_deref(),
     )?;
-    tokenizer::register_for_language(&index, &options.lang, options.dict_path.as_deref())?;
+
+    let index = match &options.index_cache {
+        Some(cache) => cache.get_or_open(
+            &index_dir,
+            &options.lang,
+            options.dict_path.as_deref(),
+            options.dict_cache.as_ref(),
+        )?,
+        None => index_cache::open_index(
+            &index_dir,
+            &options.lang,
+            options.dict_path.as_deref(),
+            options.dict_cache.as_ref(),
+        )?,
+    };
 
     let schema = index.schema();
     let fields = fields_from_schema(&schema)?;
