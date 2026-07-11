@@ -31,7 +31,9 @@ CLI=<skill-dir>/bin/packtrans-glossary   # Unix
 **Release-managed index** (automatically download from GitHub release; needs network):
 
 ```bash
+# English → Chinese
 $CLI query --lang zh_cn "Cooking Pot" --limit 10
+# `--inverse` for Chinese → English
 $CLI query --lang zh_cn "厨锅" --limit 10 --inverse
 $CLI query --lang zh_cn "Cooking Pot" --json
 ```
@@ -42,13 +44,12 @@ $CLI query --lang zh_cn "Cooking Pot" --json
 $CLI query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 20
 ```
 
-
-| Flag        | Notes                             |
-| ----------- | --------------------------------- |
-| `--lang`    | Required (e.g. `zh_cn`, `ja_jp`)  |
-| `--limit`   | Default `10`                      |
-| `--inverse` | Search target text, return source |
-| `--json`    | JSON array (same shape as `serve`) |
+| Flag        | Notes                                           |
+| ----------- | ----------------------------------------------- |
+| `--lang`    | Required (e.g. `zh_cn`, `ja_jp`)                |
+| `--limit`   | Default `10`                                    |
+| `--inverse` | Search target text (non-English), return source |
+| `--json`    | JSON array (same shape as `serve`)              |
 
 **Global flag** (place before the subcommand, e.g. `$CLI --dict-path /path query …`):
 

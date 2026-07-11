@@ -46,7 +46,8 @@ pub fn register_for_language(
     register_by_name(index, name, base, cached_dict)
 }
 
-/// Registers a named tokenizer by loading its dictionary from disk.
+/// Registers a named tokenizer, using `cached_dict` when provided or loading
+/// from disk otherwise. Returns early for the `"default"` tokenizer.
 fn register_by_name(
     index: &Index,
     name: &str,
