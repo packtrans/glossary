@@ -23,6 +23,12 @@ use tantivy::{Index, IndexReader, TantivyDocument};
 use wasm_bindgen::prelude::*;
 use zip::ZipArchive;
 
+/// Lindera release version that dictionary zip archives must match.
+#[wasm_bindgen]
+pub fn lindera_version() -> String {
+    lindera::get_version().to_owned()
+}
+
 /// A single glossary search hit returned to JavaScript.
 #[derive(Debug, Serialize)]
 pub struct QueryHit {
@@ -355,6 +361,12 @@ mod tests {
             .to_string();
 
         assert!(err.contains("dictionary"));
+    }
+
+    #[test]
+    fn exports_lindera_version_matching_dependency() {
+        assert_eq!(lindera_version(), lindera::get_version());
+        assert!(!lindera_version().is_empty());
     }
 
     #[test]
