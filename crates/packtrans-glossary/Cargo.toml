@@ -11,10 +11,12 @@ indicatif = "0.17"
 lindera.workspace = true
 lru.workspace = true
 packtrans-glossary-core = { path = "../packtrans-glossary-core" }
+rmcp = { version = "2.2", features = ["server", "macros", "schemars", "transport-io", "transport-streamable-http-server"] }
+schemars = "1"
 serde.workspace = true
 serde_json.workspace = true
 tantivy.workspace = true
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
 ureq.workspace = true
 
 [[bin]]

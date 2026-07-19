@@ -1,0 +1,27 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use crate::dict_cache::DictionaryCache;
+use crate::download_guard::DownloadCoordinator;
+use crate::index_cache::IndexCache;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub index_dir: Option<PathBuf>,
+    pub dict_path: Option<PathBuf>,
+    pub download_guard: Arc<DownloadCoordinator>,
+    pub dict_cache: DictionaryCache,
+    pub index_cache: IndexCache,
+}
+
+impl AppState {
+    pub fn new(index_dir: Option<PathBuf>, dict_path: Option<PathBuf>) -> Arc<Self> {
+        Arc::new(Self {
+            index_dir,
+            dict_path,
+            download_guard: Arc::new(DownloadCoordinator::new()),
+            dict_cache: DictionaryCache::new(),
+            index_cache: IndexCache::new(),
+        })
+    }
+}

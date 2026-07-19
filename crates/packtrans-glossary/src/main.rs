@@ -3,17 +3,21 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 
+mod app_state;
 mod dict;
 mod dict_cache;
 mod download_guard;
 mod index_cache;
 mod indexes;
+mod mcp;
 mod progress;
 mod query;
+mod query_limit;
 mod serve;
 
 use dict::DictCommand;
 use indexes::IndexCommand;
+use mcp::McpCommand;
 use query::{QueryOptions, query_index};
 use serve::ServeCommand;
 
@@ -35,6 +39,8 @@ enum Commands {
     Query(QueryCommand),
     /// Start an HTTP API server for queries (experimental, local use only).
     Serve(ServeCommand),
+    /// Start an MCP server for glossary tools (stdio or HTTP).
+    Mcp(McpCommand),
     /// Manage Lindera tokenizer dictionaries.
     Dict {
         #[command(subcommand)]
@@ -69,6 +75,10 @@ fn main() -> Result<()> {
         Commands::Serve(cmd) => {
             let rt = tokio::runtime::Runtime::new().context("failed to start async runtime")?;
             rt.block_on(serve::run(cmd, cli.dict_path))
+        }
+        Commands::Mcp(cmd) => {
+            let rt = tokio::runtime::Runtime::new().context("failed to start async runtime")?;
+            rt.block_on(mcp::run(cmd, cli.dict_path))
         }
         Commands::Dict { command } => dict::run(command, cli.dict_path.as_deref()),
         Commands::Index { command } => indexes::run(command),

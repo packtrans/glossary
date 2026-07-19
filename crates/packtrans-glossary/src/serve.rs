@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use axum::{
     Json, Router,
     extract::rejection::QueryRejection,
@@ -13,10 +13,9 @@ use axum::{
 use clap::Args;
 use serde::Deserialize;
 
-use crate::dict_cache::DictionaryCache;
-use crate::download_guard::DownloadCoordinator;
-use crate::index_cache::IndexCache;
+use crate::app_state::AppState;
 use crate::query::{QueryHit, QueryOptions, search_index, validate_regex_query};
+use crate::query_limit::validate_query_limit;
 
 #[derive(Args)]
 pub struct ServeCommand {
@@ -31,27 +30,6 @@ pub struct ServeCommand {
     /// Local index root directory; queries `{index_dir}/{lang}` (same layout as `index --out`).
     #[arg(long)]
     pub index_dir: Option<PathBuf>,
-}
-
-/// Validates HTTP query `limit` (default 10, maximum 50).
-fn validate_http_limit(limit: Option<usize>) -> Result<usize> {
-    const DEFAULT: usize = 10;
-    const MAX: usize = 50;
-    match limit {
-        None => Ok(DEFAULT),
-        Some(0) => bail!("limit must be at least 1"),
-        Some(n) if n > MAX => bail!("limit must be at most {MAX}"),
-        Some(n) => Ok(n),
-    }
-}
-
-#[derive(Clone)]
-struct AppState {
-    index_dir: Option<PathBuf>,
-    dict_path: Option<PathBuf>,
-    download_guard: Arc<DownloadCoordinator>,
-    dict_cache: DictionaryCache,
-    index_cache: IndexCache,
 }
 
 #[derive(Deserialize)]
@@ -75,13 +53,7 @@ struct ErrorBody {
 pub async fn run(cmd: ServeCommand, dict_path: Option<PathBuf>) -> Result<()> {
     let bind_addr = format!("{}:{}", cmd.host, cmd.port);
 
-    let state = Arc::new(AppState {
-        index_dir: cmd.index_dir,
-        dict_path,
-        download_guard: Arc::new(DownloadCoordinator::new()),
-        dict_cache: DictionaryCache::new(),
-        index_cache: IndexCache::new(),
-    });
+    let state = AppState::new(cmd.index_dir, dict_path);
 
     let app = Router::new()
         .route("/query", get(query_handler))
@@ -128,7 +100,7 @@ async fn handle_query(
         return Err(ApiError::bad_request("missing `lang`"));
     }
     let limit =
-        validate_http_limit(params.limit).map_err(|e| ApiError::bad_request(e.to_string()))?;
+        validate_query_limit(params.limit).map_err(|e| ApiError::bad_request(e.to_string()))?;
     validate_regex_query(&params.lang, &params.q, params.inverse, params.regex)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
@@ -186,14 +158,15 @@ mod tests {
     use axum::http::Uri;
 
     use super::*;
+    use crate::query_limit::validate_query_limit;
 
     #[test]
     fn http_limit_defaults_and_caps() {
-        assert_eq!(validate_http_limit(None).unwrap(), 10);
-        assert_eq!(validate_http_limit(Some(1)).unwrap(), 1);
-        assert_eq!(validate_http_limit(Some(50)).unwrap(), 50);
-        assert!(validate_http_limit(Some(0)).is_err());
-        assert!(validate_http_limit(Some(51)).is_err());
+        assert_eq!(validate_query_limit(None).unwrap(), 10);
+        assert_eq!(validate_query_limit(Some(1)).unwrap(), 1);
+        assert_eq!(validate_query_limit(Some(50)).unwrap(), 50);
+        assert!(validate_query_limit(Some(0)).is_err());
+        assert!(validate_query_limit(Some(51)).is_err());
     }
 
     #[test]
