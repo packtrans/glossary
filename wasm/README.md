@@ -2,7 +2,7 @@
 
 Vitest integration tests for the `packtrans-glossary-wasm` build.
 
-Tests read the same on-disk index and dictionary caches as the query CLI. They do not generate fixtures locally; if the cache is missing, tests fail with instructions to download via the CLI.
+Tests read the same on-disk index and dictionary caches as the query CLI. They load dictionary files with `loadDictionaryFromBytes` (matching the `lindera-wasm-web` API) instead of passing zip bytes into WASM.
 
 ## Prerequisites
 

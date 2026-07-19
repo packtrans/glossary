@@ -1,4 +1,8 @@
 //! Minimal Lindera tokenizer adapter for Tantivy (from `lindera-tantivy`, `from_segmenter` only).
+//!
+//! We keep this local copy instead of depending on `lindera-tantivy` because that crate pulls
+//! in `tantivy` with default features, which transitively requires `errno` and breaks
+//! `wasm32-unknown-unknown` builds.
 
 use lindera::segmenter::Segmenter;
 use lindera::token::Token as LinderaToken;

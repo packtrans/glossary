@@ -223,10 +223,15 @@ Available dictionaries: `lindera-ipadic` (Japanese), `lindera-ko-dic` (Korean), 
 
 ## WASM (`@packtrans/glossary`)
 
-The `packtrans-glossary-wasm` crate is published as [`@packtrans/glossary`](https://github.com/packtrans/glossary/pkgs/npm/glossary) for browser use. JavaScript fetches index zip bytes (and optionally a Lindera dictionary zip) and passes them into the WASM bindings.
+The `packtrans-glossary-wasm` crate is published as [`@packtrans/glossary`](https://github.com/packtrans/glossary/pkgs/npm/glossary) for browser use. JavaScript fetches index zip bytes and passes them into the WASM bindings. For CJK inverse queries, load a Lindera dictionary with [`loadDictionaryFromBytes`](#wasm-packtransglossary) (same API as [`lindera-wasm-web`](https://www.npmjs.com/package/lindera-wasm-web)); in the browser you can download and extract dictionary zips with `lindera-wasm-web/opfs`.
 
 ```ts
-import init, { GlossaryIndex, lindera_version } from "@packtrans/glossary";
+import init, {
+  GlossaryIndex,
+  loadDictionaryFromBytes,
+  lindera_version,
+} from "@packtrans/glossary";
+import { downloadDictionary, loadDictionaryFiles } from "lindera-wasm-web/opfs";
 
 await init();
 
@@ -236,20 +241,31 @@ const indexZip = await fetch(indexUrl).then((r) => r.arrayBuffer());
 const index = new GlossaryIndex(new Uint8Array(indexZip), "zh_cn");
 const hits = index.query("Cooking Pot", 10, false);
 
-// Inverse query with a Lindera dictionary fetched by JS
+// Inverse query: load dictionary files (OPFS example matches lindera-wasm-web)
 const dictUrl = `https://github.com/lindera/lindera/releases/download/v${lindera_version()}/lindera-jieba-${lindera_version()}.zip`;
-const dictZip = await fetch(dictUrl).then((r) => r.arrayBuffer());
+await downloadDictionary(dictUrl, "jieba");
+const files = await loadDictionaryFiles("jieba");
+const dictionary = loadDictionaryFromBytes(
+  files.metadata,
+  files.dictDa,
+  files.dictVals,
+  files.dictWordsIdx,
+  files.dictWords,
+  files.matrixMtx,
+  files.charDef,
+  files.unk,
+);
 const inverseIndex = new GlossaryIndex(
   new Uint8Array(indexZip),
   "zh_cn",
-  new Uint8Array(dictZip),
+  dictionary,
 );
 const inverseHits = inverseIndex.query("厨锅", 10, true);
 ```
 
-- `dictZip` is optional. When provided at construction, WASM loads the dictionary and registers the matching Lindera tokenizer. When omitted, the default tokenizer is used.
+- `dictionary` is optional. When provided at construction, WASM registers the matching Lindera tokenizer for inverse queries. When omitted, the default tokenizer is used.
+- `loadDictionaryFromBytes` matches the `lindera-wasm-web` signature so dictionary bytes loaded by either package are interchangeable.
 - Use `lindera_version()` to build dictionary download URLs that match the Lindera release this WASM build expects.
-- Dictionary release archives use the same Lindera URLs as `packtrans-glossary dict download`.
 - `inverse=true` searches target-language text and returns source-language results (same semantics as the CLI `--inverse` flag).
 
 Node.js integration tests live in [`wasm/`](wasm/README.md) (Vitest + `wasm-pack` nodejs target). They read the CLI-managed index and dictionary caches; download `zh_cn` and `lindera-jieba` before running `pnpm test`.

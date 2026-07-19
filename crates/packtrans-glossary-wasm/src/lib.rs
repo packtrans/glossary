@@ -7,6 +7,8 @@ mod dictionary;
 mod lindera_tantivy;
 mod tokenizer;
 
+pub use dictionary::{JsDictionary as Dictionary, load_dictionary_from_bytes};
+
 #[cfg(test)]
 mod test_fixtures;
 
@@ -66,16 +68,16 @@ impl GlossaryIndex {
     /// The archive may contain Tantivy files at its root or under a `{lang}/`
     /// directory, matching PackTrans release assets.
     ///
-    /// Pass optional `dict_zip` bytes to register a Lindera tokenizer for
-    /// inverse queries on indexes that use one. When omitted, the default
-    /// tokenizer is used.
+    /// Pass an optional [`Dictionary`] (from [`load_dictionary_from_bytes`]) to
+    /// register a Lindera tokenizer for inverse queries on indexes that use
+    /// one. When omitted, the default tokenizer is used.
     #[wasm_bindgen(constructor)]
     pub fn new(
         index_zip: &[u8],
         lang: &str,
-        dict_zip: Option<Vec<u8>>,
+        dictionary: Option<dictionary::JsDictionary>,
     ) -> std::result::Result<GlossaryIndex, JsValue> {
-        Self::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)
+        Self::from_zip(index_zip, lang, dictionary).map_err(to_js_error)
     }
 
     /// Builds an in-memory index from a zip archive.
@@ -83,9 +85,9 @@ impl GlossaryIndex {
     pub fn from_zip_bytes(
         index_zip: &[u8],
         lang: &str,
-        dict_zip: Option<Vec<u8>>,
+        dictionary: Option<dictionary::JsDictionary>,
     ) -> std::result::Result<GlossaryIndex, JsValue> {
-        Self::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)
+        Self::from_zip(index_zip, lang, dictionary).map_err(to_js_error)
     }
 
     /// Queries the in-memory index and returns an array of hits.
@@ -104,14 +106,16 @@ impl GlossaryIndex {
 }
 
 impl GlossaryIndex {
-    fn from_zip(index_zip: &[u8], lang: &str, dict_zip: Option<Vec<u8>>) -> Result<GlossaryIndex> {
+    fn from_zip(
+        index_zip: &[u8],
+        lang: &str,
+        dictionary: Option<dictionary::JsDictionary>,
+    ) -> Result<GlossaryIndex> {
         validate_path_segment(lang, "lang")?;
         let directory = load_zip_into_ram_directory(index_zip, lang)?;
         let index = Index::open(directory).context("failed to open index from zip bytes")?;
-        if let Some(dict_bytes) = dict_zip {
-            let dict = dictionary::load_dictionary_from_zip(&dict_bytes)
-                .context("failed to load dictionary from zip bytes")?;
-            tokenizer::register_tokenizer(&index, lang, &dict)
+        if let Some(dict) = dictionary {
+            tokenizer::register_tokenizer(&index, lang, &dict.inner)
                 .context("failed to register tokenizer from dictionary")?;
         }
         let schema = index.schema();
@@ -204,9 +208,9 @@ pub fn query(
     query: &str,
     limit: usize,
     inverse: bool,
-    dict_zip: Option<Vec<u8>>,
+    dictionary: Option<dictionary::JsDictionary>,
 ) -> std::result::Result<JsValue, JsValue> {
-    let index = GlossaryIndex::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)?;
+    let index = GlossaryIndex::from_zip(index_zip, lang, dictionary).map_err(to_js_error)?;
     index.query(query, limit, inverse)
 }
 
@@ -350,17 +354,6 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].source, "厨锅");
         assert_eq!(hits[0].target, "Cooking Pot");
-    }
-
-    #[test]
-    fn rejects_invalid_dictionary_zip_at_construction() {
-        let zip_bytes = test_fixtures::build_index_zip("zh_cn");
-        let err = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", Some(vec![1, 2, 3]))
-            .err()
-            .expect("expected dictionary load to fail")
-            .to_string();
-
-        assert!(err.contains("dictionary"));
     }
 
     #[test]

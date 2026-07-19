@@ -146,6 +146,43 @@ export function loadCliIndexZip(lang: string = TEST_LANG): Uint8Array {
   return zipDirectory(indexDir, lang);
 }
 
+export interface DictionaryFiles {
+  metadata: Uint8Array;
+  dictDa: Uint8Array;
+  dictVals: Uint8Array;
+  dictWordsIdx: Uint8Array;
+  dictWords: Uint8Array;
+  matrixMtx: Uint8Array;
+  charDef: Uint8Array;
+  unk: Uint8Array;
+}
+
+const DICTIONARY_FILE_NAMES = {
+  metadata: "metadata.json",
+  dictDa: "dict.da",
+  dictVals: "dict.vals",
+  dictWordsIdx: "dict.wordsidx",
+  dictWords: "dict.words",
+  matrixMtx: "matrix.mtx",
+  charDef: "char_def.bin",
+  unk: "unk.bin",
+} as const satisfies Record<keyof DictionaryFiles, string>;
+
+export function loadCliDictionaryFiles(lang: string = TEST_LANG): DictionaryFiles {
+  const dictDir = requireCliDictionaryDir(lang);
+  const files = {} as DictionaryFiles;
+
+  for (const [key, fileName] of Object.entries(DICTIONARY_FILE_NAMES)) {
+    const path = join(dictDir, fileName);
+    if (!existsSync(path)) {
+      throw new Error(`dictionary file not found: ${path}`);
+    }
+    files[key as keyof DictionaryFiles] = readFileSync(path);
+  }
+
+  return files;
+}
+
 export function loadCliDictionaryZip(lang: string = TEST_LANG): Uint8Array {
   const dictDir = requireCliDictionaryDir(lang);
   const dictName = basename(dictDir);

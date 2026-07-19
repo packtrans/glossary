@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
-  loadCliDictionaryZip,
+  loadCliDictionaryFiles,
   loadCliIndexZip,
   requireCliDictionaryDir,
   requireCliIndexDir,
@@ -10,7 +10,12 @@ import {
 } from "./cli-cache.js";
 
 const require = createRequire(import.meta.url);
-const { GlossaryIndex, lindera_version, query } = require("../pkg/packtrans_glossary_wasm.js");
+const {
+  GlossaryIndex,
+  loadDictionaryFromBytes,
+  lindera_version,
+  query,
+} = require("../pkg/packtrans_glossary_wasm.js");
 
 interface QueryHit {
   confidence: number;
@@ -24,13 +29,23 @@ interface QueryHit {
 
 describe("packtrans-glossary-wasm", () => {
   let indexZip: Uint8Array;
-  let dictZip: Uint8Array;
+  let dictionary: unknown;
 
   beforeAll(() => {
     requireCliIndexDir(TEST_LANG);
     requireCliDictionaryDir(TEST_LANG);
     indexZip = loadCliIndexZip(TEST_LANG);
-    dictZip = loadCliDictionaryZip(TEST_LANG);
+    const dictFiles = loadCliDictionaryFiles(TEST_LANG);
+    dictionary = loadDictionaryFromBytes(
+      dictFiles.metadata,
+      dictFiles.dictDa,
+      dictFiles.dictVals,
+      dictFiles.dictWordsIdx,
+      dictFiles.dictWords,
+      dictFiles.matrixMtx,
+      dictFiles.charDef,
+      dictFiles.unk,
+    );
   });
 
   it("exports the Lindera version for dictionary zip downloads", () => {
@@ -50,7 +65,7 @@ describe("packtrans-glossary-wasm", () => {
   });
 
   it("runs an inverse query with the CLI dictionary cache", () => {
-    const index = new GlossaryIndex(indexZip, TEST_LANG, dictZip);
+    const index = new GlossaryIndex(indexZip, TEST_LANG, dictionary);
 
     const hits = index.query("厨锅", 10, true) as QueryHit[];
 
@@ -67,9 +82,18 @@ describe("packtrans-glossary-wasm", () => {
     expect(hits.some((entry) => entry.source === "Cooking Pot")).toBe(true);
   });
 
-  it("rejects invalid dictionary zip bytes at construction", () => {
-    expect(() => new GlossaryIndex(indexZip, TEST_LANG, new Uint8Array([1, 2, 3]))).toThrow(
-      /dictionary/i,
-    );
+  it("rejects invalid dictionary bytes via loadDictionaryFromBytes", () => {
+    expect(() =>
+      loadDictionaryFromBytes(
+        new Uint8Array([1, 2, 3]),
+        new Uint8Array(),
+        new Uint8Array(),
+        new Uint8Array(),
+        new Uint8Array(),
+        new Uint8Array(),
+        new Uint8Array(),
+        new Uint8Array(),
+      ),
+    ).toThrow(/metadata/i);
   });
 });
