@@ -10,7 +10,7 @@ import {
 } from "./cli-cache.js";
 
 const require = createRequire(import.meta.url);
-const { GlossaryIndex, query } = require("../pkg/packtrans_glossary_wasm.js");
+const { GlossaryIndex, lindera_version, query } = require("../pkg/packtrans_glossary_wasm.js");
 
 interface QueryHit {
   confidence: number;
@@ -31,6 +31,10 @@ describe("packtrans-glossary-wasm", () => {
     requireCliDictionaryDir(TEST_LANG);
     indexZip = loadCliIndexZip(TEST_LANG);
     dictZip = loadCliDictionaryZip(TEST_LANG);
+  });
+
+  it("exports the Lindera version for dictionary zip downloads", () => {
+    expect(lindera_version()).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
   it("runs a forward query on the CLI-managed zh_cn index", () => {
