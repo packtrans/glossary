@@ -245,12 +245,17 @@ const inverseIndex = new GlossaryIndex(
   new Uint8Array(dictZip),
 );
 const inverseHits = inverseIndex.query("厨锅", 10, true);
+
+// Regex query (matches indexed terms; set the 4th argument to true)
+const regexHits = index.query("cook.*", 10, false, true);
+const inverseRegexHits = inverseIndex.query("锅", 50, true, true);
 ```
 
 - `dictZip` is optional. When provided at construction, WASM loads the dictionary and registers the matching Lindera tokenizer. When omitted, the default tokenizer is used.
 - Use `lindera_version()` to build dictionary download URLs that match the Lindera release this WASM build expects.
 - Dictionary release archives use the same Lindera URLs as `packtrans-glossary dict download`.
 - `inverse=true` searches target-language text and returns source-language results (same semantics as the CLI `--inverse` flag).
+- `regex=true` (optional 4th argument to `query`) treats the query string as a [Rust regular expression](https://docs.rs/regex/latest/regex/) matched against indexed terms in the selected search field. Regex queries match tokenized terms, not raw stored text; use a Lindera dictionary for CJK inverse queries.
 
 Node.js integration tests live in [`wasm/`](wasm/README.md) (Vitest + `wasm-pack` nodejs target). They read the CLI-managed index and dictionary caches; download `zh_cn` and `lindera-jieba` before running `pnpm test`.
 

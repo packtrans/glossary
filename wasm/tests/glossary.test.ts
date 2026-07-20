@@ -67,6 +67,30 @@ describe("packtrans-glossary-wasm", () => {
     expect(hits.some((entry) => entry.source === "Cooking Pot")).toBe(true);
   });
 
+  it("runs a forward regex query on the CLI-managed zh_cn index", () => {
+    const index = new GlossaryIndex(indexZip, TEST_LANG);
+
+    const hits = index.query("cook.*", 10, false, true) as QueryHit[];
+
+    expect(hits.length).toBeGreaterThan(0);
+    const hit = hits.find((entry) => entry.key.includes("cooking_pot"));
+    expect(hit).toBeDefined();
+    expect(hit?.source).toBe("Cooking Pot");
+  });
+
+  it("runs an inverse regex query with the CLI dictionary cache", () => {
+    const index = new GlossaryIndex(indexZip, TEST_LANG, dictZip);
+
+    const hits = index.query("锅", 50, true, true) as QueryHit[];
+
+    expect(hits.length).toBeGreaterThan(0);
+    const hit = hits.find(
+      (entry) => entry.key.includes("cooking_pot") && entry.source === "厨锅",
+    );
+    expect(hit).toBeDefined();
+    expect(hit?.target).toMatch(/Cooking Pot/i);
+  });
+
   it("rejects invalid dictionary zip bytes at construction", () => {
     expect(() => new GlossaryIndex(indexZip, TEST_LANG, new Uint8Array([1, 2, 3]))).toThrow(
       /dictionary/i,
