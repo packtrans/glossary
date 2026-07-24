@@ -12,7 +12,6 @@ mod indexes;
 mod mcp;
 mod progress;
 mod query;
-mod query_limit;
 mod serve;
 
 use dict::DictCommand;

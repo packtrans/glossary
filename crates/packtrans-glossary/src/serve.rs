@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::query::{QueryHit, QueryOptions, search_index, validate_regex_query};
+use crate::{app_state::AppState, query::validate_query_limit};
 use anyhow::{Context, Result};
 use axum::{
     Json, Router,
@@ -12,10 +14,6 @@ use axum::{
 };
 use clap::Args;
 use serde::Deserialize;
-
-use crate::app_state::AppState;
-use crate::query::{QueryHit, QueryOptions, search_index, validate_regex_query};
-use crate::query_limit::validate_query_limit;
 
 #[derive(Args)]
 pub struct ServeCommand {
@@ -158,7 +156,6 @@ mod tests {
     use axum::http::Uri;
 
     use super::*;
-    use crate::query_limit::validate_query_limit;
 
     #[test]
     fn http_limit_defaults_and_caps() {

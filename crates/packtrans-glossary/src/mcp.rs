@@ -15,10 +15,9 @@ use rmcp::{
 };
 use serde::Deserialize;
 
-use crate::app_state::AppState;
 use crate::indexes;
 use crate::query::{QueryOptions, search_index, validate_regex_query};
-use crate::query_limit::validate_query_limit;
+use crate::{app_state::AppState, query::validate_query_limit};
 
 #[derive(Args)]
 pub struct McpCommand {
