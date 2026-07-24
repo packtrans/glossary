@@ -23,6 +23,9 @@ pub fn target_tokenizer_name(target_language: &str) -> &'static str {
     }
 }
 
+/// User-facing error when combining inverse and regex search for CJK languages.
+pub const INVERSE_REGEX_CJK_ERROR: &str = "Regex search cannot be used with inverse mode for Chinese, Japanese, or Korean. Use a plain inverse search, or use regex in forward mode.";
+
 /// Loads a named Lindera dictionary from disk, downloading it first when needed.
 pub fn load_dictionary(name: &str, base: Option<&Path>) -> Result<lindera::dictionary::Dictionary> {
     if !dictionary::DICTIONARY_NAMES.contains(&name) {

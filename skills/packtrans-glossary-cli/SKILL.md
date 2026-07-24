@@ -36,6 +36,7 @@ $CLI query --lang zh_cn "Cooking Pot" --limit 10
 # `--inverse` for Chinese → English
 $CLI query --lang zh_cn "厨锅" --limit 10 --inverse
 $CLI query --lang zh_cn "Cooking Pot" --json
+$CLI query --lang zh_cn 'cook.*' --regex --limit 10
 ```
 
 **Local index** (`--index-dir` is the index **root**; language is appended):
@@ -49,6 +50,7 @@ $CLI query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 20
 | `--lang`    | Required (e.g. `zh_cn`, `ja_jp`)                |
 | `--limit`   | Default `10`                                    |
 | `--inverse` | Search target text (non-English), return source |
+| `--regex`   | Treat the query as a Rust regex; cannot combine with `--inverse` for Chinese, Japanese, or Korean |
 | `--json`    | JSON array (same shape as `serve`)              |
 
 **Global flag** (place before the subcommand, e.g. `$CLI --dict-path /path query …`):

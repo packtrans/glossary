@@ -131,6 +131,7 @@ packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 
 - `--limit` is optional; defaults to `10`.
 - `--inverse` searches target-language text and returns the source translation.
 - `--dict-path` optionally overrides the dictionary storage location (global query flag).
+- `--regex` treats the query as a Rust regular expression matched against indexed terms in the selected search field. Regex search cannot be combined with `--inverse` for Chinese, Japanese, or Korean.
 - `--json` prints results as a JSON array (same shape as the `serve` HTTP API).
 
 ### HTTP Server
@@ -155,11 +156,13 @@ packtrans-glossary serve --host 0.0.0.0 --port 3000 --index-dir indexes
 | `q` or `query` | yes      | —       | Search text                         |
 | `limit`        | no       | `10`    | Maximum results (max `50`)          |
 | `inverse`      | no       | `false` | Search target text, return source   |
+| `regex`       | no       | `false` | Treat `q` as a Rust regular expression matched against indexed terms; cannot combine with `inverse` for Chinese, Japanese, or Korean |
 
 Example:
 
 ```bash
 curl 'http://127.0.0.1:8080/query?lang=zh_cn&q=Cooking+Pot&limit=20&inverse=false'
+curl 'http://127.0.0.1:8080/query?lang=zh_cn&q=cook.*&limit=20&inverse=false&regex=true'
 ```
 
 Returns a JSON array of hits with `confidence`, `mod_id`, `key`, `source`, `source_lang`, `target_lang`, and `target`. Errors return `{ "error": "..." }` with HTTP 400 (bad request) or 500 (internal error).
@@ -245,12 +248,17 @@ const inverseIndex = new GlossaryIndex(
   new Uint8Array(dictZip),
 );
 const inverseHits = inverseIndex.query("厨锅", 10, true);
+
+// Regex query (matches indexed terms)
+const regexHits = index.query("cook.*", 10, false, true);
+// Inverse regex search is not available for Chinese, Japanese, or Korean when a dictionary is loaded.
 ```
 
 - `dictZip` is optional. When provided at construction, WASM loads the dictionary and registers the matching Lindera tokenizer. When omitted, the default tokenizer is used.
 - Use `lindera_version()` to build dictionary download URLs that match the Lindera release this WASM build expects.
 - Dictionary release archives use the same Lindera URLs as `packtrans-glossary dict download`.
 - `inverse=true` searches target-language text and returns source-language results (same semantics as the CLI `--inverse` flag).
+- `regex=true` (optional 4th argument to `query`) treats the query string as a [Rust regular expression](https://docs.rs/regex/latest/regex/) matched against indexed terms in the selected search field. Regex queries match tokenized terms, not raw stored text. Inverse regex search is not available for Chinese, Japanese, or Korean when a dictionary is loaded.
 
 Node.js integration tests live in [`wasm/`](wasm/README.md) (Vitest + `wasm-pack` nodejs target). They read the CLI-managed index and dictionary caches; download `zh_cn` and `lindera-jieba` before running `pnpm test`.
 

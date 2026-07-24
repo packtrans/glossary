@@ -17,7 +17,7 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use tantivy::collector::TopDocs;
 use tantivy::directory::{Directory, RamDirectory};
-use tantivy::query::QueryParser;
+use tantivy::query::{Query, QueryParser, RegexQuery};
 use tantivy::schema::{Field, Schema, Value};
 use tantivy::{Index, IndexReader, TantivyDocument};
 use wasm_bindgen::prelude::*;
@@ -57,6 +57,7 @@ pub struct GlossaryIndex {
     index: Index,
     reader: IndexReader,
     fields: Fields,
+    inverse_regex_unsupported: bool,
 }
 
 #[wasm_bindgen]
@@ -92,13 +93,19 @@ impl GlossaryIndex {
     ///
     /// Set `inverse` to `true` to search target text and return target-to-source
     /// hits.
+    ///
+    /// Set `regex` to `true` to treat `query` as a regular expression matched
+    /// against indexed terms in the selected search field.
     pub fn query(
         &self,
         query: &str,
         limit: usize,
         inverse: bool,
+        regex: Option<bool>,
     ) -> std::result::Result<JsValue, JsValue> {
-        let hits = self.search(query, limit, inverse).map_err(to_js_error)?;
+        let hits = self
+            .search(query, limit, inverse, regex.unwrap_or(false))
+            .map_err(to_js_error)?;
         serde_wasm_bindgen::to_value(&hits).map_err(to_js_error)
     }
 }
@@ -106,6 +113,7 @@ impl GlossaryIndex {
 impl GlossaryIndex {
     fn from_zip(index_zip: &[u8], lang: &str, dict_zip: Option<Vec<u8>>) -> Result<GlossaryIndex> {
         validate_path_segment(lang, "lang")?;
+        let dict_loaded = dict_zip.is_some();
         let directory = load_zip_into_ram_directory(index_zip, lang)?;
         let index = Index::open(directory).context("failed to open index from zip bytes")?;
         if let Some(dict_bytes) = dict_zip {
@@ -122,12 +130,23 @@ impl GlossaryIndex {
             index,
             reader,
             fields,
+            inverse_regex_unsupported: dict_loaded
+                && tokenizer::target_tokenizer_name(lang) != "default",
         })
     }
 
-    fn search(&self, query: &str, limit: usize, inverse: bool) -> Result<Vec<QueryHit>> {
+    fn search(
+        &self,
+        query: &str,
+        limit: usize,
+        inverse: bool,
+        regex: bool,
+    ) -> Result<Vec<QueryHit>> {
         if query.trim().is_empty() {
             bail!("query must not be empty");
+        }
+        if regex && inverse && self.inverse_regex_unsupported {
+            bail!(tokenizer::INVERSE_REGEX_CJK_ERROR);
         }
         if limit == 0 {
             bail!("limit must be at least 1");
@@ -138,10 +157,17 @@ impl GlossaryIndex {
         } else {
             self.fields.source_text
         };
-        let query_parser = QueryParser::for_index(&self.index, vec![search_field]);
-        let parsed_query = query_parser
-            .parse_query(query)
-            .with_context(|| format!("failed to parse query: {query}"))?;
+        let parsed_query: Box<dyn Query> = if regex {
+            Box::new(
+                RegexQuery::from_pattern(query, search_field)
+                    .with_context(|| format!("failed to parse regex query: {query}"))?,
+            )
+        } else {
+            let query_parser = QueryParser::for_index(&self.index, vec![search_field]);
+            query_parser
+                .parse_query(query)
+                .with_context(|| format!("failed to parse query: {query}"))?
+        };
         let searcher = self.reader.searcher();
         let top_docs = searcher.search(&parsed_query, &TopDocs::with_limit(limit))?;
 
@@ -205,9 +231,10 @@ pub fn query(
     limit: usize,
     inverse: bool,
     dict_zip: Option<Vec<u8>>,
+    regex: Option<bool>,
 ) -> std::result::Result<JsValue, JsValue> {
     let index = GlossaryIndex::from_zip(index_zip, lang, dict_zip).map_err(to_js_error)?;
-    index.query(query, limit, inverse)
+    index.query(query, limit, inverse, regex)
 }
 
 fn load_zip_into_ram_directory(index_zip: &[u8], lang: &str) -> Result<RamDirectory> {
@@ -317,7 +344,7 @@ mod tests {
         let zip_bytes = test_fixtures::build_index_zip("fr_fr");
         let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
 
-        let hits = index.search("Cooking Pot", 10, false).unwrap();
+        let hits = index.search("Cooking Pot", 10, false, false).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].mod_id, "farmersdelight");
@@ -331,7 +358,7 @@ mod tests {
         let zip_bytes = test_fixtures::build_index_zip("fr_fr");
         let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
 
-        let hits = index.search("Marmite", 10, true).unwrap();
+        let hits = index.search("Marmite", 10, true, false).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].source, "Marmite");
@@ -345,11 +372,48 @@ mod tests {
         let zip_bytes = test_fixtures::build_index_zip("zh_cn");
         let index = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", None).unwrap();
 
-        let hits = index.search("厨锅", 10, true).unwrap();
+        let hits = index.search("厨锅", 10, true, false).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].source, "厨锅");
         assert_eq!(hits[0].target, "Cooking Pot");
+    }
+
+    #[test]
+    fn supports_regex_query_on_source_text() {
+        let zip_bytes = test_fixtures::build_index_zip("fr_fr");
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
+
+        let hits = index.search("cook.*", 10, false, true).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].source, "Cooking Pot");
+    }
+
+    #[test]
+    fn supports_inverse_regex_query_on_target_text() {
+        let zip_bytes = test_fixtures::build_index_zip("fr_fr");
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
+
+        let hits = index.search("marm.*", 10, true, true).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].source, "Marmite");
+        assert_eq!(hits[0].target, "Cooking Pot");
+    }
+
+    #[test]
+    fn rejects_invalid_regex_pattern() {
+        let zip_bytes = test_fixtures::build_index_zip("fr_fr");
+        let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
+
+        let err = index
+            .search("[", 10, false, true)
+            .err()
+            .expect("expected invalid regex to fail")
+            .to_string();
+
+        assert!(err.contains("regex"));
     }
 
     #[test]
@@ -383,7 +447,27 @@ mod tests {
         );
 
         let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
-        let hits = index.search("Cooking Pot", 10, false).unwrap();
+        let hits = index.search("Cooking Pot", 10, false, false).unwrap();
         assert_eq!(hits.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod inverse_cjk_regex_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_inverse_regex_when_cjk_dictionary_is_loaded() {
+        let zip_bytes = test_fixtures::build_index_zip("zh_cn");
+        let mut index = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", None).unwrap();
+        index.inverse_regex_unsupported = true;
+
+        let error = index.search(".*", 10, true, true).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains(tokenizer::INVERSE_REGEX_CJK_ERROR)
+        );
     }
 }

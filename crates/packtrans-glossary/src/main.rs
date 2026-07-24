@@ -58,6 +58,7 @@ fn main() -> Result<()> {
                 lang: cmd.lang,
                 limit: cmd.limit,
                 inverse: cmd.inverse,
+                regex: cmd.regex,
                 dict_path: cli.dict_path,
                 download_guard: None,
                 dict_cache: None,
@@ -94,6 +95,10 @@ struct QueryCommand {
     /// Search target-language text and return source-language matches.
     #[arg(long)]
     inverse: bool,
+
+    /// Interpret the query as a regular expression matching indexed terms.
+    #[arg(long)]
+    regex: bool,
 
     /// Print results as JSON (same shape as the `serve` HTTP API).
     #[arg(long)]
