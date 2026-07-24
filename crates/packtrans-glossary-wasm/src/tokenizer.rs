@@ -21,6 +21,9 @@ pub fn target_tokenizer_name(target_language: &str) -> &'static str {
     }
 }
 
+/// Mirrors `packtrans_glossary_core::tokenizer::INVERSE_REGEX_CJK_ERROR`.
+pub const INVERSE_REGEX_CJK_ERROR: &str = "Regex search cannot be used with inverse mode for Chinese, Japanese, or Korean. Use a plain inverse search, or use regex in forward mode.";
+
 /// Registers a Lindera tokenizer on `index` when `lang` requires one.
 pub fn register_tokenizer(index: &Index, lang: &str, dict: &Dictionary) -> Result<()> {
     let name = target_tokenizer_name(lang);

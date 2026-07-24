@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use packtrans_glossary_core::dictionary;
 use packtrans_glossary_core::schema::fields_from_schema;
 use packtrans_glossary_core::{tokenizer, util};
@@ -9,7 +9,7 @@ use serde::Serialize;
 use tantivy::{
     TantivyDocument,
     collector::TopDocs,
-    query::QueryParser,
+    query::{Query, QueryParser, RegexQuery},
     schema::{Field, Value},
 };
 
@@ -32,6 +32,8 @@ pub struct QueryOptions {
     pub limit: usize,
     /// If `true`, search target text and output source text.
     pub inverse: bool,
+    /// If `true`, interpret the query as a regular expression matching indexed terms.
+    pub regex: bool,
     /// Custom base path for dictionary lookup.
     pub dict_path: Option<PathBuf>,
     /// When set (HTTP server), serializes concurrent downloads for the same resource.
@@ -80,6 +82,7 @@ pub fn query_index(options: QueryOptions, json: bool) -> Result<()> {
 /// Queries a Tantivy index and returns matching documents.
 pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
     util::validate_path_segment(&options.lang, "lang")?;
+    validate_regex_query(&options.lang, options.inverse, options.regex)?;
     let index_dir = indexes::resolve_query_index_dir(
         &options.lang,
         options.index_dir.as_deref(),
@@ -117,8 +120,15 @@ pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
     } else {
         fields.source_text
     };
-    let query_parser = QueryParser::for_index(&index, vec![search_field]);
-    let parsed_query = query_parser.parse_query(&options.query)?;
+    let parsed_query: Box<dyn Query> = if options.regex {
+        Box::new(
+            RegexQuery::from_pattern(&options.query, search_field)
+                .with_context(|| format!("failed to parse regex query: {}", options.query))?,
+        )
+    } else {
+        let query_parser = QueryParser::for_index(&index, vec![search_field]);
+        query_parser.parse_query(&options.query)?
+    };
     let top_docs = searcher.search(&parsed_query, &TopDocs::with_limit(options.limit))?;
 
     // Column semantics follow the query direction, not fixed language roles.
@@ -191,4 +201,135 @@ fn stored_text(doc: &TantivyDocument, field: Field) -> &str {
     doc.get_first(field)
         .and_then(|value| value.as_str())
         .unwrap_or("")
+}
+
+pub(crate) fn validate_regex_query(lang: &str, inverse: bool, regex: bool) -> Result<()> {
+    if regex && inverse && tokenizer::target_tokenizer_name(lang) != "default" {
+        bail!("{}", tokenizer::INVERSE_REGEX_CJK_ERROR);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use packtrans_glossary_core::schema::build_schema;
+    use tantivy::directory::MmapDirectory;
+    use tantivy::{Index, IndexSettings};
+
+    use super::*;
+
+    fn build_test_index() -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "packtrans-glossary-query-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let index_dir = root.join("en_us");
+        fs::create_dir_all(&index_dir).unwrap();
+
+        let (schema, fields) = build_schema("en_us");
+        let directory = MmapDirectory::open(&index_dir).unwrap();
+        let index = Index::create(directory, schema, IndexSettings::default()).unwrap();
+        let mut writer = index.writer(15_000_000).unwrap();
+
+        for (key, source, target) in [
+            ("cooking_pot", "Cooking Pot", "Stew Pot"),
+            ("garden_hoe", "Garden Hoe", "Garden Tool"),
+        ] {
+            let mut doc = TantivyDocument::default();
+            doc.add_text(fields.mod_id, "test");
+            doc.add_text(fields.key, key);
+            doc.add_text(fields.source_lang, "en_us");
+            doc.add_text(fields.source_text, source);
+            doc.add_text(fields.target_lang, "en_us");
+            doc.add_text(fields.target_text, target);
+            writer.add_document(doc).unwrap();
+        }
+        writer.commit().unwrap();
+        drop(writer);
+        drop(index);
+
+        root
+    }
+
+    fn options(root: &std::path::Path, query: &str, inverse: bool) -> QueryOptions {
+        QueryOptions {
+            query: query.to_string(),
+            index_dir: Some(root.to_path_buf()),
+            lang: "en_us".to_string(),
+            limit: 10,
+            inverse,
+            regex: true,
+            dict_path: None,
+            download_guard: None,
+            dict_cache: None,
+            index_cache: None,
+        }
+    }
+
+    #[test]
+    fn regex_query_matches_forward_source_terms() {
+        let root = build_test_index();
+        let hits = search_index(options(&root, "cook.*", false)).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].key, "cooking_pot");
+        assert_eq!(hits[0].source, "Cooking Pot");
+        assert_eq!(hits[0].target, "Stew Pot");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn regex_query_matches_inverse_target_terms() {
+        let root = build_test_index();
+        let hits = search_index(options(&root, "stew.*", true)).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].key, "cooking_pot");
+        assert_eq!(hits[0].source, "Stew Pot");
+        assert_eq!(hits[0].target, "Cooking Pot");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn regex_query_reports_invalid_patterns() {
+        let root = build_test_index();
+        let error = search_index(options(&root, "[", false)).unwrap_err();
+
+        assert!(error.to_string().contains("failed to parse regex query"));
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod cjk_regex_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_inverse_regex_queries_for_cjk_languages() {
+        let error = search_index(QueryOptions {
+            query: ".*".to_string(),
+            index_dir: Some(std::env::temp_dir()),
+            lang: "zh_cn".to_string(),
+            limit: 10,
+            inverse: true,
+            regex: true,
+            dict_path: None,
+            download_guard: None,
+            dict_cache: None,
+            index_cache: None,
+        })
+        .unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains(tokenizer::INVERSE_REGEX_CJK_ERROR)
+        );
+    }
 }

@@ -57,6 +57,7 @@ pub struct GlossaryIndex {
     index: Index,
     reader: IndexReader,
     fields: Fields,
+    inverse_regex_unsupported: bool,
 }
 
 #[wasm_bindgen]
@@ -112,6 +113,7 @@ impl GlossaryIndex {
 impl GlossaryIndex {
     fn from_zip(index_zip: &[u8], lang: &str, dict_zip: Option<Vec<u8>>) -> Result<GlossaryIndex> {
         validate_path_segment(lang, "lang")?;
+        let dict_loaded = dict_zip.is_some();
         let directory = load_zip_into_ram_directory(index_zip, lang)?;
         let index = Index::open(directory).context("failed to open index from zip bytes")?;
         if let Some(dict_bytes) = dict_zip {
@@ -128,6 +130,8 @@ impl GlossaryIndex {
             index,
             reader,
             fields,
+            inverse_regex_unsupported: dict_loaded
+                && tokenizer::target_tokenizer_name(lang) != "default",
         })
     }
 
@@ -140,6 +144,9 @@ impl GlossaryIndex {
     ) -> Result<Vec<QueryHit>> {
         if query.trim().is_empty() {
             bail!("query must not be empty");
+        }
+        if regex && inverse && self.inverse_regex_unsupported {
+            bail!(tokenizer::INVERSE_REGEX_CJK_ERROR);
         }
         if limit == 0 {
             bail!("limit must be at least 1");
@@ -442,5 +449,25 @@ mod tests {
         let index = GlossaryIndex::from_zip(&zip_bytes, "fr_fr", None).unwrap();
         let hits = index.search("Cooking Pot", 10, false, false).unwrap();
         assert_eq!(hits.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod inverse_cjk_regex_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_inverse_regex_when_cjk_dictionary_is_loaded() {
+        let zip_bytes = test_fixtures::build_index_zip("zh_cn");
+        let mut index = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", None).unwrap();
+        index.inverse_regex_unsupported = true;
+
+        let error = index.search(".*", 10, true, true).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains(tokenizer::INVERSE_REGEX_CJK_ERROR)
+        );
     }
 }

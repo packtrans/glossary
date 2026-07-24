@@ -78,17 +78,12 @@ describe("packtrans-glossary-wasm", () => {
     expect(hit?.source).toBe("Cooking Pot");
   });
 
-  it("runs an inverse regex query with the CLI dictionary cache", () => {
+  it("rejects an inverse regex query with the CLI dictionary cache", () => {
     const index = new GlossaryIndex(indexZip, TEST_LANG, dictZip);
 
-    const hits = index.query("锅", 50, true, true) as QueryHit[];
-
-    expect(hits.length).toBeGreaterThan(0);
-    const hit = hits.find(
-      (entry) => entry.key.includes("cooking_pot") && entry.source === "厨锅",
+    expect(() => index.query("锅", 50, true, true)).toThrow(
+      /cannot be used with inverse mode for Chinese, Japanese, or Korean/,
     );
-    expect(hit).toBeDefined();
-    expect(hit?.target).toMatch(/Cooking Pot/i);
   });
 
   it("rejects invalid dictionary zip bytes at construction", () => {

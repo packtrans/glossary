@@ -16,7 +16,7 @@ use serde::Deserialize;
 use crate::dict_cache::DictionaryCache;
 use crate::download_guard::DownloadCoordinator;
 use crate::index_cache::IndexCache;
-use crate::query::{QueryHit, QueryOptions, search_index};
+use crate::query::{QueryHit, QueryOptions, search_index, validate_regex_query};
 
 #[derive(Args)]
 pub struct ServeCommand {
@@ -63,6 +63,8 @@ struct HttpQueryParams {
     limit: Option<usize>,
     #[serde(default)]
     inverse: bool,
+    #[serde(default)]
+    regex: bool,
 }
 
 #[derive(serde::Serialize)]
@@ -127,6 +129,8 @@ async fn handle_query(
     }
     let limit =
         validate_http_limit(params.limit).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    validate_regex_query(&params.lang, params.inverse, params.regex)
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
     let options = QueryOptions {
         query: params.q,
@@ -134,6 +138,7 @@ async fn handle_query(
         lang: params.lang,
         limit,
         inverse: params.inverse,
+        regex: params.regex,
         dict_path: state.dict_path.clone(),
         download_guard: Some(Arc::clone(&state.download_guard)),
         dict_cache: Some(state.dict_cache.clone()),
@@ -177,6 +182,9 @@ impl IntoResponse for ApiError {
 
 #[cfg(test)]
 mod tests {
+    use axum::extract::Query;
+    use axum::http::Uri;
+
     use super::*;
 
     #[test]
@@ -186,5 +194,19 @@ mod tests {
         assert_eq!(validate_http_limit(Some(50)).unwrap(), 50);
         assert!(validate_http_limit(Some(0)).is_err());
         assert!(validate_http_limit(Some(51)).is_err());
+    }
+
+    #[test]
+    fn http_regex_parameter_defaults_and_parses() {
+        let Query(params) = Query::<HttpQueryParams>::try_from_uri(&Uri::from_static(
+            "/query?lang=en_us&q=cook.*&regex=true",
+        ))
+        .unwrap();
+        assert!(params.regex);
+
+        let Query(params) =
+            Query::<HttpQueryParams>::try_from_uri(&Uri::from_static("/query?lang=en_us&q=cook.*"))
+                .unwrap();
+        assert!(!params.regex);
     }
 }
