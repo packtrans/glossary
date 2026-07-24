@@ -82,7 +82,12 @@ pub fn query_index(options: QueryOptions, json: bool) -> Result<()> {
 /// Queries a Tantivy index and returns matching documents.
 pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
     util::validate_path_segment(&options.lang, "lang")?;
-    validate_regex_query(&options.lang, options.inverse, options.regex)?;
+    validate_regex_query(
+        &options.lang,
+        &options.query,
+        options.inverse,
+        options.regex,
+    )?;
     let index_dir = indexes::resolve_query_index_dir(
         &options.lang,
         options.index_dir.as_deref(),
@@ -203,9 +208,26 @@ fn stored_text(doc: &TantivyDocument, field: Field) -> &str {
         .unwrap_or("")
 }
 
-pub(crate) fn validate_regex_query(lang: &str, inverse: bool, regex: bool) -> Result<()> {
+/// Maximum pattern length (bytes) accepted for a regex query.
+///
+/// Caps the cost of compiling the automaton and scanning the term dictionary,
+/// preventing unbounded CPU consumption from crafted patterns.
+const MAX_REGEX_QUERY_LEN: usize = 64;
+
+pub(crate) fn validate_regex_query(
+    lang: &str,
+    query: &str,
+    inverse: bool,
+    regex: bool,
+) -> Result<()> {
     if regex && inverse && tokenizer::target_tokenizer_name(lang) != "default" {
         bail!("{}", tokenizer::INVERSE_REGEX_CJK_ERROR);
+    }
+    if regex && query.len() > MAX_REGEX_QUERY_LEN {
+        bail!(
+            "regex query is too long: {} bytes (max {MAX_REGEX_QUERY_LEN} bytes)",
+            query.len()
+        );
     }
     Ok(())
 }
@@ -331,5 +353,32 @@ mod cjk_regex_tests {
                 .to_string()
                 .contains(tokenizer::INVERSE_REGEX_CJK_ERROR)
         );
+    }
+}
+
+#[cfg(test)]
+mod regex_query_len_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_regex_query_at_max_length() {
+        let query = "a".repeat(MAX_REGEX_QUERY_LEN);
+        assert!(validate_regex_query("en_us", &query, false, true).is_ok());
+    }
+
+    #[test]
+    fn rejects_regex_query_exceeding_max_length() {
+        let query = "a".repeat(MAX_REGEX_QUERY_LEN + 1);
+        let error = validate_regex_query("en_us", &query, false, true)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("regex query is too long"));
+        assert!(error.contains(&MAX_REGEX_QUERY_LEN.to_string()));
+    }
+
+    #[test]
+    fn length_cap_does_not_apply_to_plain_queries() {
+        let query = "a".repeat(MAX_REGEX_QUERY_LEN + 100);
+        assert!(validate_regex_query("en_us", &query, false, false).is_ok());
     }
 }

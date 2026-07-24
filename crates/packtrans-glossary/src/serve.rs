@@ -129,7 +129,7 @@ async fn handle_query(
     }
     let limit =
         validate_http_limit(params.limit).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    validate_regex_query(&params.lang, params.inverse, params.regex)
+    validate_regex_query(&params.lang, &params.q, params.inverse, params.regex)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
     let options = QueryOptions {
