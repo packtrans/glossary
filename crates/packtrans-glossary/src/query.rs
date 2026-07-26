@@ -233,7 +233,7 @@ pub(crate) fn validate_regex_query(
 }
 
 /// Validates query `limit` (default 10, maximum 50).
-pub fn validate_query_limit(limit: Option<usize>) -> Result<usize> {
+pub(crate) fn validate_query_limit(limit: Option<usize>) -> Result<usize> {
     const DEFAULT: usize = 10;
     const MAX: usize = 50;
     match limit {

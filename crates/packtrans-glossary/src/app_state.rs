@@ -7,11 +7,11 @@ use crate::index_cache::IndexCache;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub index_dir: Option<PathBuf>,
-    pub dict_path: Option<PathBuf>,
-    pub download_guard: Arc<DownloadCoordinator>,
-    pub dict_cache: DictionaryCache,
-    pub index_cache: IndexCache,
+    pub(crate) index_dir: Option<PathBuf>,
+    pub(crate) dict_path: Option<PathBuf>,
+    pub(crate) download_guard: Arc<DownloadCoordinator>,
+    pub(crate) dict_cache: DictionaryCache,
+    pub(crate) index_cache: IndexCache,
 }
 
 impl AppState {

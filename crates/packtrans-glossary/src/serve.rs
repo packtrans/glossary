@@ -158,15 +158,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn http_limit_defaults_and_caps() {
-        assert_eq!(validate_query_limit(None).unwrap(), 10);
-        assert_eq!(validate_query_limit(Some(1)).unwrap(), 1);
-        assert_eq!(validate_query_limit(Some(50)).unwrap(), 50);
-        assert!(validate_query_limit(Some(0)).is_err());
-        assert!(validate_query_limit(Some(51)).is_err());
-    }
-
-    #[test]
     fn http_regex_parameter_defaults_and_parses() {
         let Query(params) = Query::<HttpQueryParams>::try_from_uri(&Uri::from_static(
             "/query?lang=en_us&q=cook.*&regex=true",

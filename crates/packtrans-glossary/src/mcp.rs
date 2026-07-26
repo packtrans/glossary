@@ -5,9 +5,11 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use axum::Router;
 use clap::Args;
+use packtrans_glossary_core::util;
 use rmcp::{
     ErrorData, ServiceExt,
     handler::server::wrapper::Parameters,
+    model::ErrorCode,
     schemars, tool, tool_router,
     transport::{
         StreamableHttpService, streamable_http_server::session::local::LocalSessionManager,
@@ -26,11 +28,11 @@ pub struct McpCommand {
     pub http: bool,
 
     /// HTTP bind address (only with `--http`).
-    #[arg(long, default_value = "127.0.0.1")]
+    #[arg(long, default_value = "127.0.0.1", requires = "http")]
     pub host: String,
 
     /// HTTP port (only with `--http`).
-    #[arg(long, default_value_t = 8081)]
+    #[arg(long, default_value_t = 8081, requires = "http")]
     pub port: u16,
 
     /// Local index root directory; queries `{index_dir}/{lang}` (same layout as `index --out`).
@@ -77,6 +79,10 @@ impl GlossaryMcpServer {
             validate_query_limit(params.limit).map_err(|err| invalid_params(err.to_string()))?;
         validate_regex_query(&params.lang, &params.q, params.inverse, params.regex)
             .map_err(|err| invalid_params(err.to_string()))?;
+        // Reject malformed language codes up front so they surface as invalid
+        // parameters instead of a later path-resolution failure.
+        util::validate_path_segment(&params.lang, "lang")
+            .map_err(|err| invalid_params(err.to_string()))?;
 
         let options = QueryOptions {
             query: params.q,
@@ -94,17 +100,19 @@ impl GlossaryMcpServer {
         let hits = tokio::task::spawn_blocking(move || search_index(options))
             .await
             .map_err(|err| internal_error(format!("search task panicked: {err}")))?
-            .map_err(|err| internal_error(err.to_string()))?;
+            .map_err(search_error)?;
 
         serde_json::to_string(&hits).map_err(|err| internal_error(err.to_string()))
     }
 
     #[tool(description = "List language codes available in the latest release glossary index")]
     async fn glossary_list_languages(&self) -> Result<String, ErrorData> {
-        let langs = tokio::task::spawn_blocking(indexes::list_release_languages)
-            .await
-            .map_err(|err| internal_error(format!("task panicked: {err}")))?
-            .map_err(|err| internal_error(err.to_string()))?;
+        let guard = Arc::clone(&self.state.download_guard);
+        let langs =
+            tokio::task::spawn_blocking(move || indexes::list_release_languages(Some(&guard)))
+                .await
+                .map_err(|err| internal_error(format!("task panicked: {err}")))?
+                .map_err(|err| internal_error(err.to_string()))?;
 
         serde_json::to_string(&langs).map_err(|err| internal_error(err.to_string()))
     }
@@ -182,29 +190,82 @@ fn internal_error(message: impl Into<Cow<'static, str>>) -> ErrorData {
     ErrorData::internal_error(message, None)
 }
 
+/// Maps a `search_index` failure to an MCP error: input-dependent failures
+/// (bad language code, unparseable query) become `invalid_params`, everything
+/// else (missing index, download or I/O failure) becomes `internal_error`.
+fn search_error(err: anyhow::Error) -> ErrorData {
+    let message = err.to_string();
+    let code = if message.contains("lang contains invalid path component")
+        || message.contains("failed to parse regex query")
+        || message.contains("QueryParserError")
+    {
+        ErrorCode::INVALID_PARAMS
+    } else {
+        ErrorCode::INTERNAL_ERROR
+    };
+    if code == ErrorCode::INTERNAL_ERROR {
+        eprintln!("internal error: {message}");
+    }
+    ErrorData::new(code, message, None)
+}
+
 #[cfg(test)]
 mod tests {
+    use rmcp::model::ErrorCode;
+
     use super::*;
 
-    #[test]
-    fn glossary_query_params_reject_empty_fields() {
-        let params = GlossaryQueryParams {
-            lang: String::new(),
-            q: "test".to_string(),
-            limit: None,
-            inverse: false,
-            regex: false,
-        };
-        assert!(params.lang.is_empty());
+    fn server() -> GlossaryMcpServer {
+        GlossaryMcpServer {
+            state: AppState::new(None, None),
+        }
+    }
 
-        let params = GlossaryQueryParams {
-            lang: "zh_cn".to_string(),
-            q: String::new(),
+    fn params(lang: &str, q: &str) -> GlossaryQueryParams {
+        GlossaryQueryParams {
+            lang: lang.to_string(),
+            q: q.to_string(),
             limit: None,
             inverse: false,
             regex: false,
-        };
-        assert!(params.q.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn glossary_query_rejects_invalid_input() {
+        let server = server();
+
+        let err = server
+            .glossary_query(Parameters(params("", "test")))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(err.message.contains("lang"));
+
+        let err = server
+            .glossary_query(Parameters(params("zh_cn", "")))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(err.message.contains("q"));
+
+        let mut bad_limit = params("zh_cn", "test");
+        bad_limit.limit = Some(0);
+        let err = server
+            .glossary_query(Parameters(bad_limit))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(err.message.contains("limit"));
+
+        let mut traversal = params("../etc", "test");
+        traversal.q = "test".to_string();
+        let err = server
+            .glossary_query(Parameters(traversal))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(err.message.contains("lang"));
     }
 
     #[test]
@@ -216,5 +277,26 @@ mod tests {
         let params: GlossaryQueryParams =
             serde_json::from_str(r#"{"lang":"en_us","q":"cook.*"}"#).unwrap();
         assert!(!params.regex);
+    }
+
+    #[test]
+    fn search_error_classifies_input_vs_internal() {
+        let err = search_error(anyhow::anyhow!(
+            "lang contains invalid path component: ../etc"
+        ));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+
+        let err = search_error(anyhow::anyhow!("failed to parse regex query: cook["));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+
+        let err = search_error(anyhow::anyhow!(
+            "QueryParserError: SyntaxError at position 0"
+        ));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+
+        let err = search_error(anyhow::anyhow!(
+            "index directory does not exist: indexes/zh_cn"
+        ));
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
     }
 }

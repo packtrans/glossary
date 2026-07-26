@@ -460,9 +460,8 @@ fn install_asset(
 }
 
 /// Returns language codes available in the latest release glossary index.
-pub fn list_release_languages() -> Result<Vec<String>> {
-    let release = fetch_latest_release(None)?;
-    fetch_available_languages(&release.tag_name)
+pub fn list_release_languages(download_guard: Option<&DownloadCoordinator>) -> Result<Vec<String>> {
+    available_languages(&fetch_latest_release(download_guard)?)
 }
 
 pub fn list_downloaded_indexes(base: Option<&Path>) -> Result<Vec<IndexEntry>> {
