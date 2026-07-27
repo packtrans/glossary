@@ -4,8 +4,8 @@ use anyhow::{Context, Result, bail};
 use packtrans_glossary_core::schema::build_schema;
 use packtrans_glossary_core::{text_component, util};
 
-use crate::index_paths::lang_index_dir;
-use crate::tokenizer_native;
+use crate::index::paths::lang_index_dir;
+use crate::dict::tokenizer;
 use serde_json::Value;
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
@@ -71,7 +71,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
     let index = Index::create(dir, schema, IndexSettings::default())
         .with_context(|| format!("failed to create index: {}", index_dir.display()))?;
 
-    tokenizer_native::register_for_language(
+    tokenizer::register_for_language(
         &index,
         &options.lang,
         options.dict_path.as_deref(),

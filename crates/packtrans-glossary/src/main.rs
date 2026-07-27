@@ -6,21 +6,14 @@ use clap::{Args, Parser, Subcommand};
 mod app_state;
 mod builder;
 mod dict;
-mod dict_cache;
-mod dictionary;
-mod download_guard;
-mod fs_util;
-mod index_cache;
-mod index_paths;
-mod indexes;
+mod index;
 mod mcp;
-mod progress;
 mod query;
 mod serve;
-mod tokenizer_native;
+mod util;
 
 use dict::DictCommand;
-use indexes::IndexCommand;
+use index::IndexCommand;
 use mcp::McpCommand;
 use query::{QueryOptions, query_index};
 use serve::ServeCommand;
@@ -87,7 +80,7 @@ fn main() -> Result<()> {
             rt.block_on(mcp::run(cmd, cli.dict_path))
         }
         Commands::Dict { command } => dict::run(command, cli.dict_path.as_deref()),
-        Commands::Index { command } => indexes::run(command),
+        Commands::Index { command } => index::run(command),
         Commands::Builder(cmd) => builder::run(cmd, cli.dict_path),
     }
 }

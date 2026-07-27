@@ -25,7 +25,7 @@ pub fn current_version() -> &'static str {
 
 /// Returns the root directory where dictionaries are stored.
 pub fn dictionaries_root() -> Result<PathBuf> {
-    Ok(crate::fs_util::data_dir()?
+    Ok(crate::util::fs::data_dir()?
         .join("packtrans-glossary")
         .join("dictionaries"))
 }

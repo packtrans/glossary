@@ -2,8 +2,8 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::dictionary;
-use crate::tokenizer_native;
+use super::dictionary;
+use super::tokenizer as native_tokenizer;
 use anyhow::Result;
 use lindera::dictionary::Dictionary;
 use lru::LruCache;
@@ -45,7 +45,7 @@ impl DictionaryCache {
             return Ok(Some(dict.clone()));
         }
 
-        let dict = tokenizer_native::load_dictionary(name, base)?;
+        let dict = native_tokenizer::load_dictionary(name, base)?;
         cache.put(key, dict.clone());
         Ok(Some(dict))
     }

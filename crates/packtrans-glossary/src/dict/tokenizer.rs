@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use tantivy::Index;
 
-use crate::dictionary;
+use super::dictionary;
 use packtrans_glossary_core::tokenizer::{self, DICTIONARY_NAMES};
 
 pub fn load_dictionary(name: &str, base: Option<&Path>) -> Result<lindera::dictionary::Dictionary> {

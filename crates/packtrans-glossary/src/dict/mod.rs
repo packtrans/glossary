@@ -1,10 +1,15 @@
+mod cache;
+pub mod dictionary;
+pub mod tokenizer;
+
+pub use cache::DictionaryCache;
+
 use std::path::Path;
 
-use crate::dictionary;
 use anyhow::{Result, bail};
 use clap::{Args, Subcommand};
 
-use crate::progress;
+use crate::util::progress;
 
 #[derive(Subcommand)]
 pub enum DictCommand {

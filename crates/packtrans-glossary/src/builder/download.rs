@@ -3,7 +3,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::fs_util::{copy_dir_contents, download_to_file, extract_zip_file, find_best_lang_dir};
+use crate::util::fs::{copy_dir_contents, download_to_file, extract_zip_file, find_best_lang_dir};
 use anyhow::{Context, Result};
 use packtrans_glossary_core::util::sanitize_path_part;
 
