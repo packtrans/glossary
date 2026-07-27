@@ -4,9 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use packtrans_glossary_core::util::{
-    copy_dir_contents, download_to_file, extract_zip_file, find_best_lang_dir, sanitize_path_part,
+use crate::fs_util::{
+    copy_dir_contents, download_to_file, extract_zip_file, find_best_lang_dir,
 };
+use packtrans_glossary_core::util::sanitize_path_part;
 
 use super::cli::{DownloadCommand, Platform};
 use super::util::progress_bar;

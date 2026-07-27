@@ -1639,6 +1639,7 @@ dependencies = [
  "clap",
  "indicatif",
  "lindera",
+ "lindera-tantivy",
  "lru",
  "packtrans-glossary-core",
  "rmcp",
@@ -1656,12 +1657,8 @@ name = "packtrans-glossary-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "lindera",
- "lindera-tantivy",
  "serde_json",
  "tantivy",
- "ureq",
- "zip",
 ]
 
 [[package]]

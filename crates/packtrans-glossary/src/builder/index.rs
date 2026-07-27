@@ -2,7 +2,10 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 use packtrans_glossary_core::schema::build_schema;
-use packtrans_glossary_core::{lang_index_dir, text_component, tokenizer, util};
+use packtrans_glossary_core::{text_component, util};
+
+use crate::index_paths::lang_index_dir;
+use crate::tokenizer_native;
 use serde_json::Value;
 use tantivy::{Index, IndexSettings, TantivyDocument, directory::MmapDirectory};
 
@@ -68,7 +71,7 @@ pub fn build_index(options: IndexOptions) -> Result<()> {
     let index = Index::create(dir, schema, IndexSettings::default())
         .with_context(|| format!("failed to create index: {}", index_dir.display()))?;
 
-    tokenizer::register_for_language(&index, &options.lang, options.dict_path.as_deref(), None)?;
+    tokenizer_native::register_for_language(&index, &options.lang, options.dict_path.as_deref(), None)?;
 
     let mut writer = index.writer(50_000_000)?;
 

@@ -7,7 +7,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
 use packtrans_glossary_core::util;
-use packtrans_glossary_core::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
+
+use crate::fs_util;
+use crate::index_paths::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
 use serde_json::json;
 
 use crate::download_guard::{DownloadCoordinator, with_download_lock};
@@ -384,12 +386,12 @@ fn install_asset(
     let final_index_dir = version_dir.join(lang);
 
     let install_result = (|| {
-        util::download_to_file(
+        fs_util::download_to_file(
             &http_download_client(),
             &asset.browser_download_url,
             &zip_path,
         )?;
-        util::extract_zip_file(&zip_path, &extract_dir)?;
+        fs_util::extract_zip_file(&zip_path, &extract_dir)?;
 
         let extracted_index_dir = extract_dir.join(lang);
         if !extracted_index_dir.is_dir() {

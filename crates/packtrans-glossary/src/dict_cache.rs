@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use lindera::dictionary::Dictionary;
 use lru::LruCache;
-use packtrans_glossary_core::{dictionary, tokenizer};
+use crate::dictionary;
+use crate::tokenizer_native;
+use packtrans_glossary_core::tokenizer;
 
 /// Default number of loaded Lindera dictionaries kept in memory.
 const DEFAULT_CAPACITY: usize = 4;
@@ -43,7 +45,7 @@ impl DictionaryCache {
             return Ok(Some(dict.clone()));
         }
 
-        let dict = tokenizer::load_dictionary(name, base)?;
+        let dict = tokenizer_native::load_dictionary(name, base)?;
         cache.put(key, dict.clone());
         Ok(Some(dict))
     }

@@ -9,6 +9,7 @@ axum = "0.8"
 clap.workspace = true
 indicatif = "0.17"
 lindera.workspace = true
+lindera-tantivy.workspace = true
 lru.workspace = true
 packtrans-glossary-core = { path = "../packtrans-glossary-core" }
 rmcp = { version = "2.2", features = ["server", "macros", "schemars", "transport-io", "transport-streamable-http-server"] }

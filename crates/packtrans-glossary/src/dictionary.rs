@@ -4,11 +4,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-pub const IPADIC: &str = "lindera-ipadic";
-pub const KO_DIC: &str = "lindera-ko-dic";
-pub const JIEBA: &str = "lindera-jieba";
-
-pub const DICTIONARY_NAMES: &[&str] = &[IPADIC, KO_DIC, JIEBA];
+#[allow(unused_imports)] // public re-exports required by CLI surface
+pub use packtrans_glossary_core::tokenizer::{DICTIONARY_NAMES, IPADIC, JIEBA, KO_DIC};
 
 const MAX_REMOTE_ZIP_BYTES: usize = 50 * 1024 * 1024;
 
@@ -29,7 +26,7 @@ pub fn current_version() -> &'static str {
 
 /// Returns the root directory where dictionaries are stored.
 pub fn dictionaries_root() -> Result<PathBuf> {
-    Ok(crate::util::data_dir()?
+    Ok(crate::fs_util::data_dir()?
         .join("packtrans-glossary")
         .join("dictionaries"))
 }
@@ -45,12 +42,12 @@ fn dictionaries_root_or(base: Option<&Path>) -> Result<PathBuf> {
 /// Returns the expected dictionary directory for a dictionary name under the
 /// current `lindera` version (`lindera::get_version()`).
 ///
-/// Validates `name` via [`crate::util::validate_path_segment`] and builds
+/// Validates `name` via [`packtrans_glossary_core::util::validate_path_segment`] and builds
 /// `dictionaries_root_or(base)?.join(version).join(name)`.
 pub fn dictionary_path(name: &str, base: Option<&Path>) -> Result<PathBuf> {
     let version = lindera::get_version();
-    crate::util::validate_path_segment(name, "dictionary name")?;
-    crate::util::validate_path_segment(version, "dictionary version")?;
+    packtrans_glossary_core::util::validate_path_segment(name, "dictionary name")?;
+    packtrans_glossary_core::util::validate_path_segment(version, "dictionary version")?;
     Ok(dictionaries_root_or(base)?.join(version).join(name))
 }
 
@@ -160,8 +157,8 @@ pub fn list_dictionaries(base: Option<&Path>) -> Result<Vec<DictEntry>> {
 
 /// Deletes a dictionary by name and version.
 pub fn delete_dictionary(name: &str, version: &str, base: Option<&Path>) -> Result<()> {
-    crate::util::validate_path_segment(name, "dictionary name")?;
-    crate::util::validate_path_segment(version, "dictionary version")?;
+    packtrans_glossary_core::util::validate_path_segment(name, "dictionary name")?;
+    packtrans_glossary_core::util::validate_path_segment(version, "dictionary version")?;
     let dict_dir = dictionaries_root_or(base)?.join(version).join(name);
     if !dict_dir.is_dir() {
         bail!("dictionary not found: {}", dict_dir.display());

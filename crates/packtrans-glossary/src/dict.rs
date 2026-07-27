@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::{Result, bail};
 use clap::{Args, Subcommand};
-use packtrans_glossary_core::dictionary;
+use crate::dictionary;
 
 use crate::progress;
 

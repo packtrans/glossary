@@ -7,7 +7,7 @@ use lru::LruCache;
 use tantivy::{Index, directory::MmapDirectory};
 
 use crate::dict_cache::DictionaryCache;
-use packtrans_glossary_core::tokenizer;
+use crate::tokenizer_native;
 
 /// Default number of opened Tantivy indexes kept in memory.
 const DEFAULT_CAPACITY: usize = 8;
@@ -63,7 +63,7 @@ pub(crate) fn open_index(
         Some(cache) => cache.get_or_load(lang, dict_path)?,
         None => None,
     };
-    tokenizer::register_for_language(&index, lang, dict_path, cached_dict.as_ref())?;
+    tokenizer_native::register_for_language(&index, lang, dict_path, cached_dict.as_ref())?;
 
     Ok(index)
 }

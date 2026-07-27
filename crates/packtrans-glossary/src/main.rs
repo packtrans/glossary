@@ -7,13 +7,17 @@ mod app_state;
 mod builder;
 mod dict;
 mod dict_cache;
+mod dictionary;
 mod download_guard;
+mod fs_util;
 mod index_cache;
+mod index_paths;
 mod indexes;
 mod mcp;
 mod progress;
 mod query;
 mod serve;
+mod tokenizer_native;
 
 use dict::DictCommand;
 use indexes::IndexCommand;
