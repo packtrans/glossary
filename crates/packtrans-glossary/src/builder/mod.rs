@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-pub use cli::{CreateModListCommand, DownloadCommand, IndexCommand, Platform};
+use cli::{CreateModListCommand, DownloadCommand, IndexCommand};
 
 use index::{IndexOptions, build_index};
 
