@@ -1,6 +1,6 @@
 # Packtrans Glossary
 
-Rust-based CLI tools for indexing and querying Minecraft mod glossary translations. Uses [Tantivy](https://github.com/quickwit-oss/tantivy) for fast full-text search and relevance scoring.
+Rust-based CLI tool for indexing and querying Minecraft mod glossary translations. Uses [Tantivy](https://github.com/quickwit-oss/tantivy) for fast full-text search and relevance scoring.
 
 We have also built a web App based on this repository at [packtrans/glossary-web](https://github.com/packtrans/glossary-web), try it on [https://glossary.packtrans.download](https://glossary.packtrans.download).
 
@@ -72,7 +72,7 @@ Writes the Tantivy index to `indexes/zh_cn/` (`--out` is an index root; `--lang`
 **Options:**
 
 - `--scan-dir`, `--lang`, and `--out` are required.
-- `--dict-path` optionally overrides the dictionary storage location (global builder flag).
+- `--dict-path` is a top-level global flag (place before the subcommand) that overrides Lindera dictionary storage for `query`/`dict`/`serve`/`mcp` and `builder index`.
 - Source language is always `en_us`.
 - Scans all direct child directories under `--scan-dir`; each is treated as one mod.
 - Skips mods with missing source or target language files (no error; summary reports total mods and mods with both language files).
@@ -128,7 +128,7 @@ packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 
 - `--index-dir` is an index root; the index at `{index-dir}/{lang}` is used (same layout as `index --out`). When omitted, a release index is downloaded or opened from the default data directory.
 - `--limit` is optional; defaults to `10`.
 - `--inverse` searches target-language text and returns the source translation.
-- `--dict-path` optionally overrides the dictionary storage location (global query flag).
+- `--dict-path` is a top-level global flag (place before the subcommand) that overrides Lindera dictionary storage for `query`/`dict`/`serve`/`mcp` and `builder index`.
 - `--regex` treats the query as a Rust regular expression matched against indexed terms in the selected search field. Regex search cannot be combined with `--inverse` for Chinese, Japanese, or Korean.
 - `--json` prints results as a JSON array (same shape as the `serve` HTTP API).
 
@@ -170,7 +170,7 @@ Returns a JSON array of hits with `confidence`, `mod_id`, `key`, `source`, `sour
 - `--host` defaults to `127.0.0.1`.
 - `--port` defaults to `8080`.
 - `--index-dir` is an index root (same layout as `query --index-dir`). When omitted, release indexes are used from the default data directory.
-- `--dict-path` optionally overrides the dictionary storage location (global query flag).
+- `--dict-path` is a top-level global flag (place before the subcommand) that overrides Lindera dictionary storage for `query`/`dict`/`serve`/`mcp` and `builder index`.
 
 ### Managing Release Indexes
 

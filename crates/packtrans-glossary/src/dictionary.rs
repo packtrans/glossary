@@ -4,8 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-#[allow(unused_imports)] // public re-exports required by CLI surface
-pub use packtrans_glossary_core::tokenizer::{DICTIONARY_NAMES, IPADIC, JIEBA, KO_DIC};
+pub use packtrans_glossary_core::tokenizer::DICTIONARY_NAMES;
 
 const MAX_REMOTE_ZIP_BYTES: usize = 50 * 1024 * 1024;
 
