@@ -1,8 +1,8 @@
 use std::path::Path;
 
+use crate::dictionary;
 use anyhow::{Result, bail};
 use clap::{Args, Subcommand};
-use crate::dictionary;
 
 use crate::progress;
 

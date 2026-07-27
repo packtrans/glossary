@@ -10,7 +10,9 @@ pub const INDEX_META_FILE: &str = "meta.json";
 
 /// Returns the root directory where release-downloaded indexes are stored.
 pub fn indexes_root() -> Result<PathBuf> {
-    Ok(fs_util::data_dir()?.join("packtrans-glossary").join("indexes"))
+    Ok(fs_util::data_dir()?
+        .join("packtrans-glossary")
+        .join("indexes"))
 }
 
 /// Returns `index-root/meta.json`.

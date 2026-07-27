@@ -6,10 +6,7 @@ use tantivy::Index;
 use crate::dictionary;
 use packtrans_glossary_core::tokenizer::{self, DICTIONARY_NAMES};
 
-pub fn load_dictionary(
-    name: &str,
-    base: Option<&Path>,
-) -> Result<lindera::dictionary::Dictionary> {
+pub fn load_dictionary(name: &str, base: Option<&Path>) -> Result<lindera::dictionary::Dictionary> {
     if !DICTIONARY_NAMES.contains(&name) {
         bail!("unknown tokenizer: {}", name);
     }

@@ -6,9 +6,7 @@ use tantivy::Index;
 
 use crate::lindera_tantivy::LinderaTokenizer;
 
-pub use packtrans_glossary_core::tokenizer::{
-    INVERSE_REGEX_CJK_ERROR, target_tokenizer_name,
-};
+pub use packtrans_glossary_core::tokenizer::{INVERSE_REGEX_CJK_ERROR, target_tokenizer_name};
 
 /// Registers a Lindera tokenizer on `index` when `lang` requires one.
 pub fn register_tokenizer(index: &Index, lang: &str, dict: &Dictionary) -> Result<()> {

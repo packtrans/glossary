@@ -377,8 +377,7 @@ mod tests {
 
         let err = index
             .search("[", 10, false, true)
-            .err()
-            .expect("expected invalid regex to fail")
+            .expect_err("expected invalid regex to fail")
             .to_string();
 
         assert!(err.contains("regex"));
@@ -387,10 +386,10 @@ mod tests {
     #[test]
     fn rejects_invalid_dictionary_zip_at_construction() {
         let zip_bytes = test_fixtures::build_index_zip("zh_cn");
-        let err = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", Some(vec![1, 2, 3]))
-            .err()
-            .expect("expected dictionary load to fail")
-            .to_string();
+        let Err(err) = GlossaryIndex::from_zip(&zip_bytes, "zh_cn", Some(vec![1, 2, 3])) else {
+            panic!("expected dictionary load to fail");
+        };
+        let err = err.to_string();
 
         assert!(err.contains("dictionary"));
     }

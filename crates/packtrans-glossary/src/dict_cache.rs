@@ -2,11 +2,11 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use crate::dictionary;
+use crate::tokenizer_native;
 use anyhow::Result;
 use lindera::dictionary::Dictionary;
 use lru::LruCache;
-use crate::dictionary;
-use crate::tokenizer_native;
 use packtrans_glossary_core::tokenizer;
 
 /// Default number of loaded Lindera dictionaries kept in memory.
