@@ -11,10 +11,9 @@ Download pre-built binary from [Releases](https://github.com/packtrans/glossary/
 
 ## Overview
 
-This workspace provides two command-line utilities:
+This workspace provides one command-line utility:
 
-- **`packtrans-glossary`** – End-user tool for querying translations and managing dictionaries.
-- **`packtrans-glossary-builder`** – Index builder for creating searchable translation databases, with mod list generation and language file downloading.
+- **`packtrans-glossary`** – Query translations, manage dictionaries and release indexes, serve HTTP/MCP APIs, and build searchable translation databases (via nested `builder` commands for indexing, mod-list generation, and language-file downloading).
 
 ## Features
 
@@ -34,10 +33,9 @@ This workspace provides two command-line utilities:
 
 ```text
 crates/
-├── packtrans-glossary-core       # Shared core library (schema, indexing, querying, tokenizers, utilities)
-├── packtrans-glossary            # End-user query CLI
-├── packtrans-glossary-builder    # Index builder CLI (index, create-mod-list, download)
-└── packtrans-glossary-wasm       # WASM bindings for browser use (@packtrans/glossary)
+├── packtrans-glossary-core       # Portable shared library (schema, tokenizer helpers, text components)
+├── packtrans-glossary            # CLI (query/serve/mcp/dict/index + builder)
+└── packtrans-glossary-wasm       # WASM bindings (@packtrans/glossary)
 ```
 
 ## Resource Layout
@@ -63,7 +61,7 @@ The `modid` is derived from the direct child directory name under `<scan-dir>`.
 ### Building an Index
 
 ```bash
-packtrans-glossary-builder index \
+packtrans-glossary builder index \
   --scan-dir res \
   --lang zh_cn \
   --out indexes
@@ -86,15 +84,15 @@ Writes the Tantivy index to `indexes/zh_cn/` (`--out` is an index root; `--lang`
 
 ```bash
 # Download from Modrinth using a mod list
-packtrans-glossary-builder download --platform modrinth \
+packtrans-glossary builder download --platform modrinth \
   --output res --list-file mods.json
 
 # Download from CurseForge using a mod list
-packtrans-glossary-builder download --platform curseforge \
+packtrans-glossary builder download --platform curseforge \
   --output res --list-file mods.json
 
 # Download Minecraft vanilla language files (no list file needed)
-packtrans-glossary-builder download --platform minecraft --output res
+packtrans-glossary builder download --platform minecraft --output res
 ```
 
 **Options:**
@@ -108,10 +106,10 @@ packtrans-glossary-builder download --platform minecraft --output res
 
 ```bash
 # Fetch top 1000 Modrinth mods by download count
-packtrans-glossary-builder create-mod-list --platform modrinth --output mods.json --count 1000
+packtrans-glossary builder create-mod-list --platform modrinth --output mods.json --count 1000
 
 # Fetch top 500 CurseForge mods (requires CURSEFORGE_API_KEY env var)
-packtrans-glossary-builder create-mod-list --platform curseforge --output mods.json --count 500
+packtrans-glossary builder create-mod-list --platform curseforge --output mods.json --count 500
 ```
 
 ### Querying Translations
@@ -306,13 +304,13 @@ cargo test
 
 ```bash
 # Download Minecraft vanilla language files
-cargo run --bin packtrans-glossary-builder -- download \
+cargo run --bin packtrans-glossary -- builder download \
   --platform minecraft --output res
 
 # Or use local files: place language JSON files under res/<modid>/
 
 # Build a local index
-cargo run --bin packtrans-glossary-builder -- index \
+cargo run --bin packtrans-glossary -- builder index \
   --scan-dir res --lang zh_cn --out indexes
 
 # Query the local index

@@ -48,7 +48,6 @@ jobs:
           ARCHIVE_DIR="packtrans-glossary-${TAG}-${{ matrix.target }}"
           mkdir -p "${ARCHIVE_DIR}"
           cp target/release/packtrans-glossary "${ARCHIVE_DIR}/"
-          cp target/release/packtrans-glossary-builder "${ARCHIVE_DIR}/"
           tar -czf "${ARCHIVE_DIR}.tar.gz" "${ARCHIVE_DIR}"
 
       - name: Package Windows (${{ matrix.target }})
@@ -61,7 +60,6 @@ jobs:
           $archiveDir = "packtrans-glossary-${env:TAG}-${{ matrix.target }}"
           New-Item -ItemType Directory -Force $archiveDir | Out-Null
           Copy-Item "target/release/packtrans-glossary.exe" $archiveDir/
-          Copy-Item "target/release/packtrans-glossary-builder.exe" $archiveDir/
           Compress-Archive -Path $archiveDir -DestinationPath "${archiveDir}.zip" -Force
 
       - uses: actions/upload-artifact@v4
