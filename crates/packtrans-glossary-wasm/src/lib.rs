@@ -14,11 +14,13 @@ use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use packtrans_glossary_core::schema::{Fields, fields_from_schema};
+use packtrans_glossary_core::util::validate_path_segment;
 use serde::Serialize;
 use tantivy::collector::TopDocs;
 use tantivy::directory::{Directory, RamDirectory};
 use tantivy::query::{Query, QueryParser, RegexQuery};
-use tantivy::schema::{Field, Schema, Value};
+use tantivy::schema::{Field, Value};
 use tantivy::{Index, IndexReader, TantivyDocument};
 use wasm_bindgen::prelude::*;
 use zip::ZipArchive;
@@ -39,16 +41,6 @@ pub struct QueryHit {
     pub source_lang: String,
     pub target_lang: String,
     pub target: String,
-}
-
-#[derive(Clone, Copy)]
-struct Fields {
-    mod_id: Field,
-    key: Field,
-    source_lang: Field,
-    source_text: Field,
-    target_lang: Field,
-    target_text: Field,
 }
 
 /// In-memory glossary index backed by caller-provided bytes.
@@ -300,34 +292,10 @@ fn normalize_index_entry_path(path: &Path, lang: &str) -> Result<Option<PathBuf>
     Ok(Some(relative_path))
 }
 
-fn fields_from_schema(schema: &Schema) -> Result<Fields> {
-    Ok(Fields {
-        mod_id: schema.get_field("mod_id")?,
-        key: schema.get_field("key")?,
-        source_lang: schema.get_field("source_lang")?,
-        source_text: schema.get_field("source_text")?,
-        target_lang: schema.get_field("target_lang")?,
-        target_text: schema.get_field("target_text")?,
-    })
-}
-
 fn stored_text(doc: &TantivyDocument, field: Field) -> &str {
     doc.get_first(field)
         .and_then(|value| value.as_str())
         .unwrap_or("")
-}
-
-fn validate_path_segment(value: &str, kind: &str) -> Result<()> {
-    if value.is_empty() {
-        bail!("{kind} must not be empty");
-    }
-    let mut components = Path::new(value).components();
-    let is_single_normal_component =
-        matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none();
-    if value.contains('\\') || !is_single_normal_component {
-        bail!("{kind} contains invalid path component: {value}");
-    }
-    Ok(())
 }
 
 fn to_js_error(error: impl std::fmt::Display) -> JsValue {

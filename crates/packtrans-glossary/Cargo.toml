@@ -16,7 +16,7 @@ rmcp = { version = "2.2", features = ["server", "macros", "schemars", "transport
 schemars = "1"
 serde.workspace = true
 serde_json.workspace = true
-tantivy.workspace = true
+tantivy = { workspace = true, features = ["mmap", "stopwords"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
 ureq = { workspace = true, features = ["json"] }
 zip.workspace = true
