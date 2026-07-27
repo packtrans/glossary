@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
-use crate::cli::{CreateModListCommand, Platform};
-use crate::util::{http_client, progress_bar};
+use super::cli::{CreateModListCommand, Platform};
+use super::util::{http_client, progress_bar};
 
 pub fn create_mod_list(cmd: CreateModListCommand) -> Result<()> {
     match cmd.platform {

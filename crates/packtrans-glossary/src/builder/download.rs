@@ -8,8 +8,8 @@ use packtrans_glossary_core::util::{
     copy_dir_contents, download_to_file, extract_zip_file, find_best_lang_dir, sanitize_path_part,
 };
 
-use crate::cli::{DownloadCommand, Platform};
-use crate::util::progress_bar;
+use super::cli::{DownloadCommand, Platform};
+use super::util::progress_bar;
 
 pub struct ModEntry {
     pub id: String,
@@ -21,8 +21,8 @@ pub fn download(cmd: DownloadCommand) -> Result<()> {
     let temp_path = cmd
         .temp_path
         .unwrap_or_else(|| env::temp_dir().join("packtrans-glossary"));
-    let api_client = crate::util::http_client();
-    let download_client = crate::util::http_download_client();
+    let api_client = super::util::http_client();
+    let download_client = super::util::http_download_client();
 
     match cmd.platform {
         Platform::Curseforge => {

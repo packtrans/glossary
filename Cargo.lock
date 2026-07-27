@@ -1648,19 +1648,6 @@ dependencies = [
  "tantivy",
  "tokio",
  "ureq",
-]
-
-[[package]]
-name = "packtrans-glossary-builder"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "indicatif",
- "packtrans-glossary-core",
- "serde_json",
- "tantivy",
- "ureq",
  "zip",
 ]
 

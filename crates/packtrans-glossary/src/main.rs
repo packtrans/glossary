@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 
 mod app_state;
+mod builder;
 mod dict;
 mod dict_cache;
 mod download_guard;
@@ -22,7 +23,7 @@ use serve::ServeCommand;
 
 #[derive(Parser)]
 #[command(name = "packtrans-glossary")]
-#[command(about = "Query Minecraft mod glossary translations")]
+#[command(about = "Query and build Minecraft mod glossary translations")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -50,6 +51,8 @@ enum Commands {
         #[command(subcommand)]
         command: IndexCommand,
     },
+    /// Build indexes and fetch mod language resources.
+    Builder(builder::BuilderArgs),
 }
 
 fn main() -> Result<()> {
@@ -81,6 +84,7 @@ fn main() -> Result<()> {
         }
         Commands::Dict { command } => dict::run(command, cli.dict_path.as_deref()),
         Commands::Index { command } => indexes::run(command),
+        Commands::Builder(cmd) => builder::run(cmd, cli.dict_path),
     }
 }
 
