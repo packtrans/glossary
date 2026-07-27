@@ -5,6 +5,7 @@ use anyhow::{Context, Result, bail};
 use packtrans_glossary_core::dictionary;
 use packtrans_glossary_core::schema::fields_from_schema;
 use packtrans_glossary_core::{tokenizer, util};
+use schemars::JsonSchema;
 use serde::Serialize;
 use tantivy::{
     TantivyDocument,
@@ -45,7 +46,7 @@ pub struct QueryOptions {
 }
 
 /// A single glossary search hit.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct QueryHit {
     pub confidence: f32,
     pub mod_id: String,
@@ -232,6 +233,43 @@ pub(crate) fn validate_regex_query(
     Ok(())
 }
 
+/// Kind of failure returned by [`search_index`] and index resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SearchFailureKind {
+    InvalidInput,
+    MissingIndex,
+    Internal,
+}
+
+/// Classifies search/index resolution failures for MCP tool and HTTP error mapping.
+pub(crate) fn classify_search_failure(err: &anyhow::Error) -> SearchFailureKind {
+    let msg = err.to_string();
+    if msg.starts_with("index directory does not exist:") {
+        return SearchFailureKind::MissingIndex;
+    }
+    if msg.contains("lang contains invalid path component")
+        || msg.contains(" must not be empty")
+        || msg.contains("failed to parse regex query:")
+        || msg.contains("QueryParserError")
+        || msg.contains("regex queries are not supported")
+    {
+        return SearchFailureKind::InvalidInput;
+    }
+    SearchFailureKind::Internal
+}
+
+/// Validates query `limit` (default 10, maximum 50).
+pub(crate) fn validate_query_limit(limit: Option<usize>) -> Result<usize> {
+    const DEFAULT: usize = 10;
+    const MAX: usize = 50;
+    match limit {
+        None => Ok(DEFAULT),
+        Some(0) => bail!("limit must be at least 1"),
+        Some(n) if n > MAX => bail!("limit must be at most {MAX}"),
+        Some(n) => Ok(n),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -325,6 +363,39 @@ mod tests {
 
         assert!(error.to_string().contains("failed to parse regex query"));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn query_limit_defaults_and_caps() {
+        assert_eq!(validate_query_limit(None).unwrap(), 10);
+        assert_eq!(validate_query_limit(Some(1)).unwrap(), 1);
+        assert_eq!(validate_query_limit(Some(50)).unwrap(), 50);
+        assert!(validate_query_limit(Some(0)).is_err());
+        assert!(validate_query_limit(Some(51)).is_err());
+    }
+
+    #[test]
+    fn classify_search_failure_kinds() {
+        assert_eq!(
+            classify_search_failure(&anyhow::anyhow!(
+                "index directory does not exist: indexes/zh_cn"
+            )),
+            SearchFailureKind::MissingIndex
+        );
+        assert_eq!(
+            classify_search_failure(&anyhow::anyhow!(
+                "lang contains invalid path component: ../etc"
+            )),
+            SearchFailureKind::InvalidInput
+        );
+        assert_eq!(
+            classify_search_failure(&anyhow::anyhow!("failed to parse regex query: cook[")),
+            SearchFailureKind::InvalidInput
+        );
+        assert_eq!(
+            classify_search_failure(&anyhow::anyhow!("disk read failed")),
+            SearchFailureKind::Internal
+        );
     }
 }
 

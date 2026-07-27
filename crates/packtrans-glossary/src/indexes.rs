@@ -64,7 +64,7 @@ struct DownloadedIndexMeta {
     current_version_downloaded_time: Option<u64>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct IndexEntry {
     pub lang: String,
     pub version: String,
@@ -457,6 +457,11 @@ fn install_asset(
         let _ = fs::remove_dir_all(&temp_index_dir);
     }
     install_result
+}
+
+/// Returns language codes available in the latest release glossary index.
+pub fn list_release_languages(download_guard: Option<&DownloadCoordinator>) -> Result<Vec<String>> {
+    available_languages(&fetch_latest_release(download_guard)?)
 }
 
 pub fn list_downloaded_indexes(base: Option<&Path>) -> Result<Vec<IndexEntry>> {
