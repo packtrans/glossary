@@ -13,6 +13,7 @@ use axum::{
     routing::get,
 };
 use clap::Args;
+use packtrans_glossary_core::util;
 use serde::Deserialize;
 
 #[derive(Args)]
@@ -100,6 +101,8 @@ async fn handle_query(
     let limit =
         validate_query_limit(params.limit).map_err(|e| ApiError::bad_request(e.to_string()))?;
     validate_regex_query(&params.lang, &params.q, params.inverse, params.regex)
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+    util::validate_path_segment(&params.lang, "lang")
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
     let options = QueryOptions {

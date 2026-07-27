@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -7,18 +6,23 @@ use axum::Router;
 use clap::Args;
 use packtrans_glossary_core::util;
 use rmcp::{
-    ErrorData, ServiceExt,
-    handler::server::wrapper::Parameters,
-    model::ErrorCode,
+    ServiceExt,
+    handler::server::wrapper::{Json, Parameters},
+    model::{CallToolResult, ContentBlock},
     schemars, tool, tool_router,
     transport::{
-        StreamableHttpService, streamable_http_server::session::local::LocalSessionManager,
+        StreamableHttpServerConfig, StreamableHttpService,
+        streamable_http_server::session::local::LocalSessionManager,
     },
 };
 use serde::Deserialize;
 
 use crate::indexes;
-use crate::query::{QueryOptions, search_index, validate_regex_query};
+use crate::progress;
+use crate::query::{
+    QueryHit, QueryOptions, SearchFailureKind, classify_search_failure, search_index,
+    validate_regex_query,
+};
 use crate::{app_state::AppState, query::validate_query_limit};
 
 #[derive(Args)]
@@ -57,6 +61,12 @@ struct GlossaryQueryParams {
     regex: bool,
 }
 
+#[derive(Debug, serde::Serialize, schemars::JsonSchema)]
+struct InstalledIndex {
+    lang: String,
+    version: String,
+}
+
 #[derive(Clone)]
 pub struct GlossaryMcpServer {
     state: Arc<AppState>,
@@ -68,21 +78,19 @@ impl GlossaryMcpServer {
     async fn glossary_query(
         &self,
         Parameters(params): Parameters<GlossaryQueryParams>,
-    ) -> Result<String, ErrorData> {
+    ) -> Result<Json<Vec<QueryHit>>, CallToolResult> {
         if params.lang.is_empty() {
-            return Err(invalid_params("missing `lang`"));
+            return Err(tool_error("missing `lang`"));
         }
         if params.q.is_empty() {
-            return Err(invalid_params("missing search text (`q`)"));
+            return Err(tool_error("missing search text (`q`)"));
         }
         let limit =
-            validate_query_limit(params.limit).map_err(|err| invalid_params(err.to_string()))?;
+            validate_query_limit(params.limit).map_err(|err| tool_error(err.to_string()))?;
         validate_regex_query(&params.lang, &params.q, params.inverse, params.regex)
-            .map_err(|err| invalid_params(err.to_string()))?;
-        // Reject malformed language codes up front so they surface as invalid
-        // parameters instead of a later path-resolution failure.
+            .map_err(|err| tool_error(err.to_string()))?;
         util::validate_path_segment(&params.lang, "lang")
-            .map_err(|err| invalid_params(err.to_string()))?;
+            .map_err(|err| tool_error(err.to_string()))?;
 
         let options = QueryOptions {
             query: params.q,
@@ -99,39 +107,49 @@ impl GlossaryMcpServer {
 
         let hits = tokio::task::spawn_blocking(move || search_index(options))
             .await
-            .map_err(|err| internal_error(format!("search task panicked: {err}")))?
-            .map_err(search_error)?;
+            .map_err(|err| tool_error(format!("search task panicked: {err}")))?
+            .map_err(map_search_failure)?;
 
-        serde_json::to_string(&hits).map_err(|err| internal_error(err.to_string()))
+        Ok(Json(hits))
     }
 
     #[tool(description = "List language codes available in the latest release glossary index")]
-    async fn glossary_list_languages(&self) -> Result<String, ErrorData> {
+    async fn glossary_list_languages(&self) -> Result<Json<Vec<String>>, CallToolResult> {
         let guard = Arc::clone(&self.state.download_guard);
         let langs =
             tokio::task::spawn_blocking(move || indexes::list_release_languages(Some(&guard)))
                 .await
-                .map_err(|err| internal_error(format!("task panicked: {err}")))?
-                .map_err(|err| internal_error(err.to_string()))?;
+                .map_err(|err| tool_error(format!("task panicked: {err}")))?
+                .map_err(|err| tool_error(err.to_string()))?;
 
-        serde_json::to_string(&langs).map_err(|err| internal_error(err.to_string()))
+        Ok(Json(langs))
     }
 
     #[tool(description = "List glossary indexes currently installed locally")]
-    async fn glossary_list_installed(&self) -> Result<String, ErrorData> {
+    async fn glossary_list_installed(&self) -> Result<Json<Vec<InstalledIndex>>, CallToolResult> {
         let index_dir = self.state.index_dir.clone();
         let entries = tokio::task::spawn_blocking(move || {
-            indexes::list_downloaded_indexes(index_dir.as_deref())
+            indexes::list_downloaded_indexes(index_dir.as_deref()).map(|entries| {
+                entries
+                    .into_iter()
+                    .map(|entry| InstalledIndex {
+                        lang: entry.lang,
+                        version: entry.version,
+                    })
+                    .collect::<Vec<_>>()
+            })
         })
         .await
-        .map_err(|err| internal_error(format!("task panicked: {err}")))?
-        .map_err(|err| internal_error(err.to_string()))?;
+        .map_err(|err| tool_error(format!("task panicked: {err}")))?
+        .map_err(|err| tool_error(err.to_string()))?;
 
-        serde_json::to_string(&entries).map_err(|err| internal_error(err.to_string()))
+        Ok(Json(entries))
     }
 }
 
 pub async fn run(cmd: McpCommand, dict_path: Option<PathBuf>) -> Result<()> {
+    progress::set_suppress_spinners(true);
+
     let server = GlossaryMcpServer {
         state: AppState::new(cmd.index_dir, dict_path),
     };
@@ -158,10 +176,36 @@ async fn run_stdio(server: GlossaryMcpServer) -> Result<()> {
 
 async fn run_http(server: GlossaryMcpServer, host: &str, port: u16) -> Result<()> {
     let bind_addr = format!("{host}:{port}");
+    let is_loopback_bind = matches!(host, "127.0.0.1" | "localhost" | "::1");
+    let is_wildcard_bind = host == "0.0.0.0" || host == "::";
+
+    if !is_loopback_bind && !is_wildcard_bind {
+        eprintln!(
+            "warning: MCP HTTP is intended for loopback use; binding to {host} may reject clients unless the Host header matches allowed_hosts"
+        );
+    }
+    if is_wildcard_bind {
+        eprintln!(
+            "warning: binding to {host}; clients must send a loopback Host header (127.0.0.1, localhost, or ::1)"
+        );
+    }
+
+    let config = if is_loopback_bind || is_wildcard_bind {
+        StreamableHttpServerConfig::default()
+    } else {
+        StreamableHttpServerConfig::default().with_allowed_hosts([
+            "localhost",
+            "127.0.0.1",
+            "::1",
+            host,
+            &format!("{host}:{port}"),
+        ])
+    };
+
     let service = StreamableHttpService::new(
         move || Ok(server.clone()),
         LocalSessionManager::default().into(),
-        Default::default(),
+        config,
     );
     let app = Router::new().nest_service("/mcp", service);
     let listener = tokio::net::TcpListener::bind(&bind_addr)
@@ -180,39 +224,25 @@ async fn run_http(server: GlossaryMcpServer, host: &str, port: u16) -> Result<()
     Ok(())
 }
 
-fn invalid_params(message: impl Into<Cow<'static, str>>) -> ErrorData {
-    ErrorData::invalid_params(message, None)
+fn tool_error(message: impl Into<String>) -> CallToolResult {
+    CallToolResult::error(vec![ContentBlock::text(message.into())])
 }
 
-fn internal_error(message: impl Into<Cow<'static, str>>) -> ErrorData {
-    let message = message.into();
-    eprintln!("internal error: {message}");
-    ErrorData::internal_error(message, None)
-}
-
-/// Maps a `search_index` failure to an MCP error: input-dependent failures
-/// (bad language code, unparseable query) become `invalid_params`, everything
-/// else (missing index, download or I/O failure) becomes `internal_error`.
-fn search_error(err: anyhow::Error) -> ErrorData {
-    let message = err.to_string();
-    let code = if message.contains("lang contains invalid path component")
-        || message.contains("failed to parse regex query")
-        || message.contains("QueryParserError")
-    {
-        ErrorCode::INVALID_PARAMS
+fn map_search_failure(err: anyhow::Error) -> CallToolResult {
+    let kind = classify_search_failure(&err);
+    let message = if kind == SearchFailureKind::MissingIndex {
+        format!("{err}. Install an index with: packtrans-glossary index download --lang <lang>")
     } else {
-        ErrorCode::INTERNAL_ERROR
+        err.to_string()
     };
-    if code == ErrorCode::INTERNAL_ERROR {
+    if kind == SearchFailureKind::Internal {
         eprintln!("internal error: {message}");
     }
-    ErrorData::new(code, message, None)
+    CallToolResult::error(vec![ContentBlock::text(message)])
 }
 
 #[cfg(test)]
 mod tests {
-    use rmcp::model::ErrorCode;
-
     use super::*;
 
     fn server() -> GlossaryMcpServer {
@@ -231,41 +261,58 @@ mod tests {
         }
     }
 
+    fn tool_error_text(result: CallToolResult) -> String {
+        result
+            .content
+            .first()
+            .and_then(|block| block.as_text())
+            .map(|text| text.text.clone())
+            .unwrap_or_default()
+    }
+
+    fn expect_tool_error(result: Result<Json<Vec<QueryHit>>, CallToolResult>) -> CallToolResult {
+        match result {
+            Err(err) => err,
+            Ok(_) => panic!("expected tool error"),
+        }
+    }
+
     #[tokio::test]
     async fn glossary_query_rejects_invalid_input() {
         let server = server();
 
-        let err = server
-            .glossary_query(Parameters(params("", "test")))
-            .await
-            .unwrap_err();
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains("lang"));
+        let err = expect_tool_error(server.glossary_query(Parameters(params("", "test"))).await);
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("lang"));
 
-        let err = server
-            .glossary_query(Parameters(params("zh_cn", "")))
-            .await
-            .unwrap_err();
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains("q"));
+        let err = expect_tool_error(server.glossary_query(Parameters(params("zh_cn", ""))).await);
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("q"));
 
         let mut bad_limit = params("zh_cn", "test");
         bad_limit.limit = Some(0);
-        let err = server
-            .glossary_query(Parameters(bad_limit))
-            .await
-            .unwrap_err();
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains("limit"));
+        let err = expect_tool_error(server.glossary_query(Parameters(bad_limit)).await);
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("limit"));
 
-        let mut traversal = params("../etc", "test");
-        traversal.q = "test".to_string();
-        let err = server
-            .glossary_query(Parameters(traversal))
-            .await
-            .unwrap_err();
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains("lang"));
+        let err = expect_tool_error(
+            server
+                .glossary_query(Parameters(params("../etc", "test")))
+                .await,
+        );
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("lang"));
+    }
+
+    #[tokio::test]
+    async fn glossary_query_rejects_inverse_regex_for_cjk() {
+        let server = server();
+        let mut p = params("zh_cn", "test");
+        p.inverse = true;
+        p.regex = true;
+        let err = expect_tool_error(server.glossary_query(Parameters(p)).await);
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("regex"));
     }
 
     #[test]
@@ -280,23 +327,13 @@ mod tests {
     }
 
     #[test]
-    fn search_error_classifies_input_vs_internal() {
-        let err = search_error(anyhow::anyhow!(
-            "lang contains invalid path component: ../etc"
-        ));
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-
-        let err = search_error(anyhow::anyhow!("failed to parse regex query: cook["));
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-
-        let err = search_error(anyhow::anyhow!(
-            "QueryParserError: SyntaxError at position 0"
-        ));
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-
-        let err = search_error(anyhow::anyhow!(
+    fn map_search_failure_classifies_missing_index() {
+        let result = map_search_failure(anyhow::anyhow!(
             "index directory does not exist: indexes/zh_cn"
         ));
-        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert_eq!(result.is_error, Some(true));
+        let text = tool_error_text(result);
+        assert!(text.contains("index directory does not exist"));
+        assert!(text.contains("index download"));
     }
 }

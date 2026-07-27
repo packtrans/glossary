@@ -68,7 +68,7 @@ cargo run --bin packtrans-glossary -- serve
 cargo run --bin packtrans-glossary -- mcp
 
 # MCP server (streamable HTTP; experimental, local use only)
-cargo run --bin packtrans-glossary -- mcp --http --port 8081
+cargo run --bin packtrans-glossary -- mcp --http --host 127.0.0.1 --port 8081
 # endpoint: http://127.0.0.1:8081/mcp
 
 # Manage release indexes (default data dir)

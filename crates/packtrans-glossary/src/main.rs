@@ -98,6 +98,9 @@ struct QueryCommand {
     lang: String,
 
     /// Maximum number of results to return.
+    ///
+    /// Unlike `serve` and `mcp`, the CLI does not cap this at 50 — large
+    /// values are allowed for scripting and batch use.
     #[arg(long, default_value_t = 10)]
     limit: usize,
 
