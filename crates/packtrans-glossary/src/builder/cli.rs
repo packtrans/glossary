@@ -1,28 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
-
-#[derive(Parser)]
-#[command(name = "packtrans-glossary-builder")]
-#[command(about = "Build Minecraft mod glossary translation indexes")]
-pub struct Cli {
-    #[command(subcommand)]
-    pub command: Commands,
-
-    /// Base directory for Lindera tokenizer dictionaries.
-    #[arg(long)]
-    pub dict_path: Option<PathBuf>,
-}
-
-#[derive(Subcommand)]
-pub enum Commands {
-    /// Build a Tantivy search index from language files.
-    Index(IndexCommand),
-    /// Fetch a mod list from Modrinth, CurseForge, or Minecraft.
-    CreateModList(CreateModListCommand),
-    /// Download mod language files for indexing.
-    Download(DownloadCommand),
-}
+use clap::{Args, ValueEnum};
 
 #[derive(Args)]
 pub struct IndexCommand {

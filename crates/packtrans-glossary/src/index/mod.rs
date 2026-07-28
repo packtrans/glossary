@@ -7,11 +7,19 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
 use packtrans_glossary_core::util;
-use packtrans_glossary_core::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
+
+mod cache;
+pub mod paths;
+
+pub use cache::IndexCache;
+pub(crate) use cache::open_index;
+
+use crate::util::fs as fs_util;
+use paths::{index_meta_path, indexes_root, lang_index_dir, release_index_dir};
 use serde_json::json;
 
-use crate::download_guard::{DownloadCoordinator, with_download_lock};
-use crate::progress;
+use crate::util::download_guard::{DownloadCoordinator, with_download_lock};
+use crate::util::progress;
 
 const GLOSSARY_INDEXES_LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/packtrans/glossary-indexes/releases/latest";
@@ -384,12 +392,12 @@ fn install_asset(
     let final_index_dir = version_dir.join(lang);
 
     let install_result = (|| {
-        util::download_to_file(
+        fs_util::download_to_file(
             &http_download_client(),
             &asset.browser_download_url,
             &zip_path,
         )?;
-        util::extract_zip_file(&zip_path, &extract_dir)?;
+        fs_util::extract_zip_file(&zip_path, &extract_dir)?;
 
         let extracted_index_dir = extract_dir.join(lang);
         if !extracted_index_dir.is_dir() {
@@ -811,7 +819,7 @@ mod tests {
     use std::thread;
 
     use super::*;
-    use crate::download_guard::DownloadCoordinator;
+    use crate::util::download_guard::DownloadCoordinator;
 
     fn temp_root(name: &str) -> PathBuf {
         let root =

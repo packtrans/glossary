@@ -17,8 +17,8 @@ use rmcp::{
 };
 use serde::Deserialize;
 
-use crate::indexes;
-use crate::progress;
+use crate::index;
+use crate::util::progress;
 use crate::query::{
     QueryHit, QueryOptions, SearchFailureKind, classify_search_failure, search_index,
     validate_regex_query,
@@ -117,7 +117,7 @@ impl GlossaryMcpServer {
     async fn glossary_list_languages(&self) -> Result<Json<Vec<String>>, CallToolResult> {
         let guard = Arc::clone(&self.state.download_guard);
         let langs =
-            tokio::task::spawn_blocking(move || indexes::list_release_languages(Some(&guard)))
+            tokio::task::spawn_blocking(move || index::list_release_languages(Some(&guard)))
                 .await
                 .map_err(|err| tool_error(format!("task panicked: {err}")))?
                 .map_err(|err| tool_error(err.to_string()))?;
@@ -129,7 +129,7 @@ impl GlossaryMcpServer {
     async fn glossary_list_installed(&self) -> Result<Json<Vec<InstalledIndex>>, CallToolResult> {
         let index_dir = self.state.index_dir.clone();
         let entries = tokio::task::spawn_blocking(move || {
-            indexes::list_downloaded_indexes(index_dir.as_deref()).map(|entries| {
+            index::list_downloaded_indexes(index_dir.as_deref()).map(|entries| {
                 entries
                     .into_iter()
                     .map(|entry| InstalledIndex {

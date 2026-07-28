@@ -1,14 +1,18 @@
 use std::path::{Path, PathBuf};
 
-use crate::util;
 use anyhow::Result;
+
+use crate::util::fs;
+use packtrans_glossary_core::util;
 
 /// Metadata file stored at the index root.
 pub const INDEX_META_FILE: &str = "meta.json";
 
 /// Returns the root directory where release-downloaded indexes are stored.
 pub fn indexes_root() -> Result<PathBuf> {
-    Ok(util::data_dir()?.join("packtrans-glossary").join("indexes"))
+    Ok(fs::data_dir()?
+        .join("packtrans-glossary")
+        .join("indexes"))
 }
 
 /// Returns `index-root/meta.json`.

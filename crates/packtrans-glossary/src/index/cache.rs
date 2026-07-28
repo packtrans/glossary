@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use lru::LruCache;
 use tantivy::{Index, directory::MmapDirectory};
 
-use crate::dict_cache::DictionaryCache;
-use packtrans_glossary_core::tokenizer;
+use crate::dict::DictionaryCache;
+use crate::dict::tokenizer;
 
 /// Default number of opened Tantivy indexes kept in memory.
 const DEFAULT_CAPACITY: usize = 8;

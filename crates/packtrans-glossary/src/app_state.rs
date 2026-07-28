@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::dict_cache::DictionaryCache;
-use crate::download_guard::DownloadCoordinator;
-use crate::index_cache::IndexCache;
+use crate::dict::DictionaryCache;
+use crate::index::IndexCache;
+use crate::util::download_guard::DownloadCoordinator;
 
 #[derive(Clone)]
 pub struct AppState {

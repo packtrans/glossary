@@ -6,23 +6,7 @@ use tantivy::Index;
 
 use crate::lindera_tantivy::LinderaTokenizer;
 
-/// Returns the tokenizer name to use for a given target language code.
-///
-/// Mirrors `packtrans-glossary-core::tokenizer::target_tokenizer_name`.
-pub fn target_tokenizer_name(target_language: &str) -> &'static str {
-    if target_language == "lzh" || target_language.starts_with("zh") {
-        "lindera-jieba"
-    } else if target_language.starts_with("ja") {
-        "lindera-ipadic"
-    } else if target_language.starts_with("ko") {
-        "lindera-ko-dic"
-    } else {
-        "default"
-    }
-}
-
-/// Mirrors `packtrans_glossary_core::tokenizer::INVERSE_REGEX_CJK_ERROR`.
-pub const INVERSE_REGEX_CJK_ERROR: &str = "Regex search cannot be used with inverse mode for Chinese, Japanese, or Korean. Use a plain inverse search, or use regex in forward mode.";
+pub use packtrans_glossary_core::tokenizer::{INVERSE_REGEX_CJK_ERROR, target_tokenizer_name};
 
 /// Registers a Lindera tokenizer on `index` when `lang` requires one.
 pub fn register_tokenizer(index: &Index, lang: &str, dict: &Dictionary) -> Result<()> {

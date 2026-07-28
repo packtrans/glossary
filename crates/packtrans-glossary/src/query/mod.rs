@@ -2,9 +2,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
-use packtrans_glossary_core::dictionary;
 use packtrans_glossary_core::schema::fields_from_schema;
 use packtrans_glossary_core::{tokenizer, util};
+
+use crate::dict::dictionary;
 use schemars::JsonSchema;
 use serde::Serialize;
 use tantivy::{
@@ -14,11 +15,11 @@ use tantivy::{
     schema::{Field, Value},
 };
 
-use crate::dict_cache::DictionaryCache;
-use crate::download_guard::DownloadCoordinator;
-use crate::index_cache::{self, IndexCache};
-use crate::indexes;
-use crate::progress;
+use crate::dict::DictionaryCache;
+use crate::util::download_guard::DownloadCoordinator;
+use crate::index::{self, IndexCache, open_index};
+
+use crate::util::progress;
 
 /// Options for querying a search index.
 pub struct QueryOptions {
@@ -89,7 +90,7 @@ pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
         options.inverse,
         options.regex,
     )?;
-    let index_dir = indexes::resolve_query_index_dir(
+    let index_dir = index::resolve_query_index_dir(
         &options.lang,
         options.index_dir.as_deref(),
         options.download_guard.as_deref(),
@@ -108,7 +109,7 @@ pub fn search_index(options: QueryOptions) -> Result<Vec<QueryHit>> {
             options.dict_path.as_deref(),
             options.dict_cache.as_ref(),
         )?,
-        None => index_cache::open_index(
+        None => open_index(
             &index_dir,
             &options.lang,
             options.dict_path.as_deref(),
@@ -191,7 +192,7 @@ fn ensure_tokenizer_dictionary(
     };
     let lock_key = format!("dict:{}:{}", dict_root.display(), name);
 
-    crate::download_guard::with_download_lock(download_guard, &lock_key, || {
+    crate::util::download_guard::with_download_lock(download_guard, &lock_key, || {
         if dictionary::dictionary_path(name, base)?.is_dir() {
             return Ok(());
         }

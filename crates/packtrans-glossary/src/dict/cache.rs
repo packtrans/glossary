@@ -2,10 +2,12 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use super::dictionary;
+use super::tokenizer as native_tokenizer;
 use anyhow::Result;
 use lindera::dictionary::Dictionary;
 use lru::LruCache;
-use packtrans_glossary_core::{dictionary, tokenizer};
+use packtrans_glossary_core::tokenizer;
 
 /// Default number of loaded Lindera dictionaries kept in memory.
 const DEFAULT_CAPACITY: usize = 4;
@@ -43,7 +45,7 @@ impl DictionaryCache {
             return Ok(Some(dict.clone()));
         }
 
-        let dict = tokenizer::load_dictionary(name, base)?;
+        let dict = native_tokenizer::load_dictionary(name, base)?;
         cache.put(key, dict.clone());
         Ok(Some(dict))
     }

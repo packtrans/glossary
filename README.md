@@ -1,6 +1,6 @@
 # Packtrans Glossary
 
-Rust-based CLI tools for indexing and querying Minecraft mod glossary translations. Uses [Tantivy](https://github.com/quickwit-oss/tantivy) for fast full-text search and relevance scoring.
+Rust-based CLI tool for indexing and querying Minecraft mod glossary translations. Uses [Tantivy](https://github.com/quickwit-oss/tantivy) for fast full-text search and relevance scoring.
 
 We have also built a web App based on this repository at [packtrans/glossary-web](https://github.com/packtrans/glossary-web), try it on [https://glossary.packtrans.download](https://glossary.packtrans.download).
 
@@ -11,10 +11,9 @@ Download pre-built binary from [Releases](https://github.com/packtrans/glossary/
 
 ## Overview
 
-This workspace provides two command-line utilities:
+This workspace provides one command-line utility:
 
-- **`packtrans-glossary`** – End-user tool for querying translations and managing dictionaries.
-- **`packtrans-glossary-builder`** – Index builder for creating searchable translation databases, with mod list generation and language file downloading.
+- **`packtrans-glossary`** – Query translations, manage dictionaries and release indexes, serve HTTP/MCP APIs, and build searchable translation databases (via nested `builder` commands for indexing, mod-list generation, and language-file downloading).
 
 ## Features
 
@@ -34,10 +33,9 @@ This workspace provides two command-line utilities:
 
 ```text
 crates/
-├── packtrans-glossary-core       # Shared core library (schema, indexing, querying, tokenizers, utilities)
-├── packtrans-glossary            # End-user query CLI
-├── packtrans-glossary-builder    # Index builder CLI (index, create-mod-list, download)
-└── packtrans-glossary-wasm       # WASM bindings for browser use (@packtrans/glossary)
+├── packtrans-glossary-core       # Portable shared library (schema, tokenizer helpers, text components)
+├── packtrans-glossary            # CLI (query/serve/mcp/dict/index + builder)
+└── packtrans-glossary-wasm       # WASM bindings (@packtrans/glossary)
 ```
 
 ## Resource Layout
@@ -63,7 +61,7 @@ The `modid` is derived from the direct child directory name under `<scan-dir>`.
 ### Building an Index
 
 ```bash
-packtrans-glossary-builder index \
+packtrans-glossary builder index \
   --scan-dir res \
   --lang zh_cn \
   --out indexes
@@ -74,7 +72,7 @@ Writes the Tantivy index to `indexes/zh_cn/` (`--out` is an index root; `--lang`
 **Options:**
 
 - `--scan-dir`, `--lang`, and `--out` are required.
-- `--dict-path` optionally overrides the dictionary storage location (global builder flag).
+- `--dict-path` is a top-level global flag (place before the subcommand) that overrides Lindera dictionary storage for `query`/`dict`/`serve`/`mcp` and `builder index`.
 - Source language is always `en_us`.
 - Scans all direct child directories under `--scan-dir`; each is treated as one mod.
 - Skips mods with missing source or target language files (no error; summary reports total mods and mods with both language files).
@@ -86,15 +84,15 @@ Writes the Tantivy index to `indexes/zh_cn/` (`--out` is an index root; `--lang`
 
 ```bash
 # Download from Modrinth using a mod list
-packtrans-glossary-builder download --platform modrinth \
+packtrans-glossary builder download --platform modrinth \
   --output res --list-file mods.json
 
 # Download from CurseForge using a mod list
-packtrans-glossary-builder download --platform curseforge \
+packtrans-glossary builder download --platform curseforge \
   --output res --list-file mods.json
 
 # Download Minecraft vanilla language files (no list file needed)
-packtrans-glossary-builder download --platform minecraft --output res
+packtrans-glossary builder download --platform minecraft --output res
 ```
 
 **Options:**
@@ -108,10 +106,10 @@ packtrans-glossary-builder download --platform minecraft --output res
 
 ```bash
 # Fetch top 1000 Modrinth mods by download count
-packtrans-glossary-builder create-mod-list --platform modrinth --output mods.json --count 1000
+packtrans-glossary builder create-mod-list --platform modrinth --output mods.json --count 1000
 
 # Fetch top 500 CurseForge mods (requires CURSEFORGE_API_KEY env var)
-packtrans-glossary-builder create-mod-list --platform curseforge --output mods.json --count 500
+packtrans-glossary builder create-mod-list --platform curseforge --output mods.json --count 500
 ```
 
 ### Querying Translations
@@ -130,7 +128,7 @@ packtrans-glossary query --index-dir indexes --lang zh_cn "Cooking Pot" --limit 
 - `--index-dir` is an index root; the index at `{index-dir}/{lang}` is used (same layout as `index --out`). When omitted, a release index is downloaded or opened from the default data directory.
 - `--limit` is optional; defaults to `10`.
 - `--inverse` searches target-language text and returns the source translation.
-- `--dict-path` optionally overrides the dictionary storage location (global query flag).
+- `--dict-path` is a top-level global flag (place before the subcommand) that overrides Lindera dictionary storage for `query`/`dict`/`serve`/`mcp` and `builder index`.
 - `--regex` treats the query as a Rust regular expression matched against indexed terms in the selected search field. Regex search cannot be combined with `--inverse` for Chinese, Japanese, or Korean.
 - `--json` prints results as a JSON array (same shape as the `serve` HTTP API).
 
@@ -172,7 +170,7 @@ Returns a JSON array of hits with `confidence`, `mod_id`, `key`, `source`, `sour
 - `--host` defaults to `127.0.0.1`.
 - `--port` defaults to `8080`.
 - `--index-dir` is an index root (same layout as `query --index-dir`). When omitted, release indexes are used from the default data directory.
-- `--dict-path` optionally overrides the dictionary storage location (global query flag).
+- `--dict-path` is a top-level global flag (place before the subcommand) that overrides Lindera dictionary storage for `query`/`dict`/`serve`/`mcp` and `builder index`.
 
 ### Managing Release Indexes
 
@@ -306,13 +304,13 @@ cargo test
 
 ```bash
 # Download Minecraft vanilla language files
-cargo run --bin packtrans-glossary-builder -- download \
+cargo run --bin packtrans-glossary -- builder download \
   --platform minecraft --output res
 
 # Or use local files: place language JSON files under res/<modid>/
 
 # Build a local index
-cargo run --bin packtrans-glossary-builder -- index \
+cargo run --bin packtrans-glossary -- builder index \
   --scan-dir res --lang zh_cn --out indexes
 
 # Query the local index

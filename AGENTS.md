@@ -2,11 +2,10 @@
 
 ## Project overview
 
-Rust CLI workspace for indexing/querying Minecraft mod translation glossaries. Four crates under `crates/`:
+Rust CLI workspace for indexing/querying Minecraft mod translation glossaries. Three crates under `crates/`:
 
-- `packtrans-glossary-core` — shared library (schema, tokenizers, download/zip utilities, index path helpers)
-- `packtrans-glossary` — query CLI with `query`, `serve`, `mcp`, `dict`, and `index` subcommands
-- `packtrans-glossary-builder` — builder CLI with subcommands: `index`, `create-mod-list`, `download`
+- `packtrans-glossary-core` — portable shared library (schema, tokenizer helpers, text components)
+- `packtrans-glossary` — CLI with `query`, `serve`, `mcp`, `dict`, `index`, and nested `builder` subcommands
 - `packtrans-glossary-wasm` — WASM bindings for browser use (published as `@packtrans/glossary`)
 
 ## Toolchain requirement
@@ -32,11 +31,11 @@ packtrans-glossary dict download lindera-jieba
 cd wasm && pnpm install && pnpm test
 ```
 
-## Running the CLIs
+## Running the CLI
 
-The builder has three subcommands: `index` (build a Tantivy index from language files), `create-mod-list` (fetch mod lists from APIs), and `download` (download mod jar language files from Modrinth/CurseForge/Minecraft).
+The main CLI supports `query` (search translations, with `--inverse` for reverse lookup), `serve` (HTTP API for queries), `mcp` (MCP server for AI assistants), `dict` (manage Lindera dictionaries), `index` (manage release-downloaded indexes in the default data directory), and nested `builder` commands.
 
-The query CLI supports `query` (search translations, with `--inverse` for reverse lookup), `serve` (HTTP API for queries), `mcp` (MCP server for AI assistants), `dict` (manage Lindera dictionaries), and `index` (manage release-downloaded indexes in the default data directory).
+The `builder` subcommand has three nested commands: `index` (build a Tantivy index from language files), `create-mod-list` (fetch mod lists from APIs), and `download` (download mod jar language files from Modrinth/CurseForge/Minecraft).
 
 ### Index paths
 
@@ -45,10 +44,10 @@ The query CLI supports `query` (search translations, with `--inverse` for revers
 
 ```sh
 # Download Minecraft vanilla language files (no API key needed)
-cargo run --bin packtrans-glossary-builder -- download --platform minecraft --output res
+cargo run --bin packtrans-glossary -- builder download --platform minecraft --output res
 
 # Build a local index (never writes to the data directory)
-cargo run --bin packtrans-glossary-builder -- index --scan-dir res --lang zh_cn --out indexes
+cargo run --bin packtrans-glossary -- builder index --scan-dir res --lang zh_cn --out indexes
 # writes to indexes/zh_cn
 
 # Query a release-managed index (downloads to the default data dir when needed)
