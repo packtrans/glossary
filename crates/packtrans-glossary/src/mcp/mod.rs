@@ -61,6 +61,22 @@ struct GlossaryQueryParams {
     regex: bool,
 }
 
+// MCP requires tool outputSchema root type "object" — wrap Vec outputs.
+#[derive(Debug, serde::Serialize, schemars::JsonSchema)]
+struct QueryHitsOutput {
+    hits: Vec<QueryHit>,
+}
+
+#[derive(Debug, serde::Serialize, schemars::JsonSchema)]
+struct LanguagesOutput {
+    languages: Vec<String>,
+}
+
+#[derive(Debug, serde::Serialize, schemars::JsonSchema)]
+struct InstalledIndexesOutput {
+    indexes: Vec<InstalledIndex>,
+}
+
 #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
 struct InstalledIndex {
     lang: String,
@@ -78,7 +94,7 @@ impl GlossaryMcpServer {
     async fn glossary_query(
         &self,
         Parameters(params): Parameters<GlossaryQueryParams>,
-    ) -> Result<Json<Vec<QueryHit>>, CallToolResult> {
+    ) -> Result<Json<QueryHitsOutput>, CallToolResult> {
         if params.lang.is_empty() {
             return Err(tool_error("missing `lang`"));
         }
@@ -110,11 +126,11 @@ impl GlossaryMcpServer {
             .map_err(|err| tool_error(format!("search task panicked: {err}")))?
             .map_err(map_search_failure)?;
 
-        Ok(Json(hits))
+        Ok(Json(QueryHitsOutput { hits }))
     }
 
     #[tool(description = "List language codes available in the latest release glossary index")]
-    async fn glossary_list_languages(&self) -> Result<Json<Vec<String>>, CallToolResult> {
+    async fn glossary_list_languages(&self) -> Result<Json<LanguagesOutput>, CallToolResult> {
         let guard = Arc::clone(&self.state.download_guard);
         let langs =
             tokio::task::spawn_blocking(move || index::list_release_languages(Some(&guard)))
@@ -122,11 +138,11 @@ impl GlossaryMcpServer {
                 .map_err(|err| tool_error(format!("task panicked: {err}")))?
                 .map_err(|err| tool_error(err.to_string()))?;
 
-        Ok(Json(langs))
+        Ok(Json(LanguagesOutput { languages: langs }))
     }
 
     #[tool(description = "List glossary indexes currently installed locally")]
-    async fn glossary_list_installed(&self) -> Result<Json<Vec<InstalledIndex>>, CallToolResult> {
+    async fn glossary_list_installed(&self) -> Result<Json<InstalledIndexesOutput>, CallToolResult> {
         let index_dir = self.state.index_dir.clone();
         let entries = tokio::task::spawn_blocking(move || {
             index::list_downloaded_indexes(index_dir.as_deref()).map(|entries| {
@@ -143,7 +159,7 @@ impl GlossaryMcpServer {
         .map_err(|err| tool_error(format!("task panicked: {err}")))?
         .map_err(|err| tool_error(err.to_string()))?;
 
-        Ok(Json(entries))
+        Ok(Json(InstalledIndexesOutput { indexes: entries }))
     }
 }
 
@@ -270,7 +286,7 @@ mod tests {
             .unwrap_or_default()
     }
 
-    fn expect_tool_error(result: Result<Json<Vec<QueryHit>>, CallToolResult>) -> CallToolResult {
+    fn expect_tool_error(result: Result<Json<QueryHitsOutput>, CallToolResult>) -> CallToolResult {
         match result {
             Err(err) => err,
             Ok(_) => panic!("expected tool error"),
