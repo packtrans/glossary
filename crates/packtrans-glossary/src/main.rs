@@ -15,7 +15,7 @@ mod util;
 use dict::DictCommand;
 use index::IndexCommand;
 use mcp::McpCommand;
-use query::{QueryOptions, query_index};
+use query::{QueryOptions, QuerySettings, query_index};
 use serve::ServeCommand;
 
 #[derive(Parser)]
@@ -59,15 +59,17 @@ fn main() -> Result<()> {
         Commands::Query(cmd) => query_index(
             QueryOptions {
                 query: cmd.query,
-                index_dir: cmd.index_dir,
-                lang: cmd.lang,
-                limit: cmd.limit,
-                inverse: cmd.inverse,
-                regex: cmd.regex,
-                dict_path: cli.dict_path,
-                download_guard: None,
-                dict_cache: None,
-                index_cache: None,
+                settings: QuerySettings {
+                    index_dir: cmd.index_dir,
+                    lang: cmd.lang,
+                    limit: cmd.limit,
+                    inverse: cmd.inverse,
+                    regex: cmd.regex,
+                    dict_path: cli.dict_path,
+                    download_guard: None,
+                    dict_cache: None,
+                    index_cache: None,
+                },
             },
             cmd.json,
         ),

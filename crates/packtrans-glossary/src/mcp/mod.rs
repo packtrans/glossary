@@ -18,12 +18,16 @@ use rmcp::{
 use serde::Deserialize;
 
 use crate::index;
-use crate::util::progress;
 use crate::query::{
-    QueryHit, QueryOptions, SearchFailureKind, classify_search_failure, search_index,
+    BatchQueryResult, QueryHit, QueryOptions, QuerySettings, SearchFailureKind,
+    classify_search_failure, search_index, search_index_batch, validate_regex_mode,
     validate_regex_query,
 };
-use crate::{app_state::AppState, query::validate_query_limit};
+use crate::util::progress;
+use crate::{
+    app_state::AppState,
+    query::{validate_batch_size, validate_query_limit},
+};
 
 #[derive(Args)]
 pub struct McpCommand {
@@ -61,10 +65,32 @@ struct GlossaryQueryParams {
     regex: bool,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct GlossaryQueryBatchParams {
+    /// Target language code (e.g. `zh_cn`, `ja_jp`).
+    lang: String,
+    /// Search texts, each queried independently (max 20).
+    queries: Vec<String>,
+    /// Maximum number of results per query (default 10, max 50).
+    #[serde(default)]
+    limit: Option<usize>,
+    /// Search target-language text and return source-language matches.
+    #[serde(default)]
+    inverse: bool,
+    /// Interpret each query as a regular expression matching indexed terms.
+    #[serde(default)]
+    regex: bool,
+}
+
 // MCP requires tool outputSchema root type "object" — wrap Vec outputs.
 #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
 struct QueryHitsOutput {
     hits: Vec<QueryHit>,
+}
+
+#[derive(Debug, serde::Serialize, schemars::JsonSchema)]
+struct BatchQueryHitsOutput {
+    results: Vec<BatchQueryResult>,
 }
 
 #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
@@ -110,6 +136,46 @@ impl GlossaryMcpServer {
 
         let options = QueryOptions {
             query: params.q,
+            settings: QuerySettings {
+                index_dir: self.state.index_dir.clone(),
+                lang: params.lang,
+                limit,
+                inverse: params.inverse,
+                regex: params.regex,
+                dict_path: self.state.dict_path.clone(),
+                download_guard: Some(Arc::clone(&self.state.download_guard)),
+                dict_cache: Some(self.state.dict_cache.clone()),
+                index_cache: Some(self.state.index_cache.clone()),
+            },
+        };
+
+        let hits = tokio::task::spawn_blocking(move || search_index(options))
+            .await
+            .map_err(|err| tool_error(format!("search task panicked: {err}")))?
+            .map_err(map_search_failure)?;
+
+        Ok(Json(QueryHitsOutput { hits }))
+    }
+
+    #[tool(
+        description = "Search Minecraft mod glossary translations for several queries at once. All queries share one language, limit, inverse and regex setting; each result carries its own hits or error."
+    )]
+    async fn glossary_query_batch(
+        &self,
+        Parameters(params): Parameters<GlossaryQueryBatchParams>,
+    ) -> Result<Json<BatchQueryHitsOutput>, CallToolResult> {
+        if params.lang.is_empty() {
+            return Err(tool_error("missing `lang`"));
+        }
+        validate_batch_size(params.queries.len()).map_err(|err| tool_error(err.to_string()))?;
+        let limit =
+            validate_query_limit(params.limit).map_err(|err| tool_error(err.to_string()))?;
+        util::validate_path_segment(&params.lang, "lang")
+            .map_err(|err| tool_error(err.to_string()))?;
+        validate_regex_mode(&params.lang, params.inverse, params.regex)
+            .map_err(|err| tool_error(err.to_string()))?;
+
+        let settings = QuerySettings {
             index_dir: self.state.index_dir.clone(),
             lang: params.lang,
             limit,
@@ -121,12 +187,13 @@ impl GlossaryMcpServer {
             index_cache: Some(self.state.index_cache.clone()),
         };
 
-        let hits = tokio::task::spawn_blocking(move || search_index(options))
-            .await
-            .map_err(|err| tool_error(format!("search task panicked: {err}")))?
-            .map_err(map_search_failure)?;
+        let results =
+            tokio::task::spawn_blocking(move || search_index_batch(&settings, &params.queries))
+                .await
+                .map_err(|err| tool_error(format!("search task panicked: {err}")))?
+                .map_err(map_search_failure)?;
 
-        Ok(Json(QueryHitsOutput { hits }))
+        Ok(Json(BatchQueryHitsOutput { results }))
     }
 
     #[tool(description = "List language codes available in the latest release glossary index")]
@@ -142,7 +209,9 @@ impl GlossaryMcpServer {
     }
 
     #[tool(description = "List glossary indexes currently installed locally")]
-    async fn glossary_list_installed(&self) -> Result<Json<InstalledIndexesOutput>, CallToolResult> {
+    async fn glossary_list_installed(
+        &self,
+    ) -> Result<Json<InstalledIndexesOutput>, CallToolResult> {
         let index_dir = self.state.index_dir.clone();
         let entries = tokio::task::spawn_blocking(move || {
             index::list_downloaded_indexes(index_dir.as_deref()).map(|entries| {
@@ -260,6 +329,7 @@ fn map_search_failure(err: anyhow::Error) -> CallToolResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::query::MAX_BATCH_QUERIES;
 
     fn server() -> GlossaryMcpServer {
         GlossaryMcpServer {
@@ -340,6 +410,90 @@ mod tests {
         let params: GlossaryQueryParams =
             serde_json::from_str(r#"{"lang":"en_us","q":"cook.*"}"#).unwrap();
         assert!(!params.regex);
+    }
+
+    #[tokio::test]
+    async fn glossary_query_batch_rejects_shared_cjk_inverse_regex() {
+        let server = server();
+        let mut p = batch_params("zh_cn", &["test"]);
+        p.inverse = true;
+        p.regex = true;
+        let err = expect_batch_tool_error(server.glossary_query_batch(Parameters(p)).await);
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("regex"));
+    }
+
+    fn batch_params(lang: &str, queries: &[&str]) -> GlossaryQueryBatchParams {
+        GlossaryQueryBatchParams {
+            lang: lang.to_string(),
+            queries: queries.iter().map(|q| q.to_string()).collect(),
+            limit: None,
+            inverse: false,
+            regex: false,
+        }
+    }
+
+    fn expect_batch_tool_error(
+        result: Result<Json<BatchQueryHitsOutput>, CallToolResult>,
+    ) -> CallToolResult {
+        match result {
+            Err(err) => err,
+            Ok(_) => panic!("expected tool error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn glossary_query_batch_rejects_invalid_input() {
+        let server = server();
+
+        let err = expect_batch_tool_error(
+            server
+                .glossary_query_batch(Parameters(batch_params("", &["test"])))
+                .await,
+        );
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("lang"));
+
+        let err = expect_batch_tool_error(
+            server
+                .glossary_query_batch(Parameters(batch_params("zh_cn", &[])))
+                .await,
+        );
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("at least one"));
+
+        let too_many = vec!["test"; MAX_BATCH_QUERIES + 1];
+        let err = expect_batch_tool_error(
+            server
+                .glossary_query_batch(Parameters(batch_params("zh_cn", &too_many)))
+                .await,
+        );
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("at most"));
+
+        let mut bad_limit = batch_params("zh_cn", &["test"]);
+        bad_limit.limit = Some(51);
+        let err = expect_batch_tool_error(server.glossary_query_batch(Parameters(bad_limit)).await);
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("limit"));
+
+        let err = expect_batch_tool_error(
+            server
+                .glossary_query_batch(Parameters(batch_params("../etc", &["test"])))
+                .await,
+        );
+        assert_eq!(err.is_error, Some(true));
+        assert!(tool_error_text(err).contains("lang"));
+    }
+
+    #[test]
+    fn glossary_query_batch_params_parse_defaults() {
+        let params: GlossaryQueryBatchParams =
+            serde_json::from_str(r#"{"lang":"zh_cn","queries":["a","b"],"inverse":true}"#).unwrap();
+        assert_eq!(params.queries, vec!["a".to_string(), "b".to_string()]);
+        assert!(params.inverse);
+        assert!(!params.regex);
+        assert!(params.limit.is_none());
     }
 
     #[test]

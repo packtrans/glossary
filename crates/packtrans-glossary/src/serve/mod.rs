@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::query::{QueryHit, QueryOptions, search_index, validate_regex_query};
+use crate::query::{QueryHit, QueryOptions, QuerySettings, search_index, validate_regex_query};
 use crate::{app_state::AppState, query::validate_query_limit};
 use anyhow::{Context, Result};
 use axum::{
@@ -107,15 +107,17 @@ async fn handle_query(
 
     let options = QueryOptions {
         query: params.q,
-        index_dir: state.index_dir.clone(),
-        lang: params.lang,
-        limit,
-        inverse: params.inverse,
-        regex: params.regex,
-        dict_path: state.dict_path.clone(),
-        download_guard: Some(Arc::clone(&state.download_guard)),
-        dict_cache: Some(state.dict_cache.clone()),
-        index_cache: Some(state.index_cache.clone()),
+        settings: QuerySettings {
+            index_dir: state.index_dir.clone(),
+            lang: params.lang,
+            limit,
+            inverse: params.inverse,
+            regex: params.regex,
+            dict_path: state.dict_path.clone(),
+            download_guard: Some(Arc::clone(&state.download_guard)),
+            dict_cache: Some(state.dict_cache.clone()),
+            index_cache: Some(state.index_cache.clone()),
+        },
     };
 
     tokio::task::spawn_blocking(move || search_index(options))
