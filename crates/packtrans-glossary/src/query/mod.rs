@@ -249,7 +249,9 @@ fn search_one(
         )
     } else {
         let query_parser = QueryParser::for_index(index, vec![search_field]);
-        query_parser.parse_query(query)?
+        query_parser
+            .parse_query(query)
+            .with_context(|| format!("failed to parse query: {query}"))?
     };
     let top_docs = searcher.search(&parsed_query, &TopDocs::with_limit(limit))?;
 
@@ -354,6 +356,10 @@ fn validate_regex_length(query: &str, regex: bool) -> Result<()> {
     Ok(())
 }
 
+/// Validates the shared regex mode and the pattern length for a single query.
+///
+/// Batch callers run [`validate_regex_mode`] once up front and then only the
+/// per-query length, so one overlong pattern cannot fail the whole batch.
 pub(crate) fn validate_regex_query(
     lang: &str,
     query: &str,
@@ -380,9 +386,9 @@ pub(crate) fn classify_search_failure(err: &anyhow::Error) -> SearchFailureKind 
     }
     if msg.contains("lang contains invalid path component")
         || msg.contains(" must not be empty")
+        || msg.contains("failed to parse query:")
         || msg.contains("failed to parse regex query:")
         || msg.contains("regex query is too long")
-        || msg.contains("QueryParserError")
         || msg.contains("regex queries are not supported")
     {
         return SearchFailureKind::InvalidInput;
@@ -554,13 +560,13 @@ mod tests {
         assert!(error.to_string().contains("failed to parse regex query"));
     }
 
-    fn batch_settings(root: &std::path::Path) -> QuerySettings {
+    fn batch_settings(root: &std::path::Path, regex: bool) -> QuerySettings {
         QuerySettings {
             index_dir: Some(root.to_path_buf()),
             lang: "en_us".to_string(),
             limit: 10,
             inverse: false,
-            regex: true,
+            regex,
             dict_path: None,
             download_guard: None,
             dict_cache: None,
@@ -573,7 +579,7 @@ mod tests {
         let index = TestIndex::build();
         let queries = vec!["cook.*".to_string(), "garden.*".to_string()];
 
-        let results = search_index_batch(&batch_settings(index.path()), &queries).unwrap();
+        let results = search_index_batch(&batch_settings(index.path(), true), &queries).unwrap();
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].query, "cook.*");
@@ -588,7 +594,7 @@ mod tests {
         let index = TestIndex::build();
         let queries = vec!["cook.*".to_string(), "[".to_string(), "".to_string()];
 
-        let results = search_index_batch(&batch_settings(index.path()), &queries).unwrap();
+        let results = search_index_batch(&batch_settings(index.path(), true), &queries).unwrap();
 
         assert_eq!(results[0].hits.as_ref().unwrap().len(), 1);
         assert!(results[0].error.is_none());
@@ -604,6 +610,26 @@ mod tests {
 
         assert!(results[2].hits.is_none());
         assert!(results[2].error.as_deref().unwrap().contains("empty"));
+    }
+
+    #[test]
+    fn batch_confines_plain_query_syntax_error_to_the_failing_query() {
+        let index = TestIndex::build();
+        let queries = vec!["cook AND".to_string(), "Cooking Pot".to_string()];
+
+        let results = search_index_batch(&batch_settings(index.path(), false), &queries).unwrap();
+
+        assert!(results[0].hits.is_none());
+        assert!(
+            results[0]
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("failed to parse query: cook AND")
+        );
+
+        assert_eq!(results[1].hits.as_ref().unwrap().len(), 1);
+        assert!(results[1].error.is_none());
     }
 
     #[test]
@@ -651,6 +677,10 @@ mod tests {
             classify_search_failure(&anyhow::anyhow!(
                 "lang contains invalid path component: ../etc"
             )),
+            SearchFailureKind::InvalidInput
+        );
+        assert_eq!(
+            classify_search_failure(&anyhow::anyhow!("failed to parse query: cook AND")),
             SearchFailureKind::InvalidInput
         );
         assert_eq!(
