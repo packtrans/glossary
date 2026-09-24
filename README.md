@@ -172,6 +172,41 @@ Returns a JSON array of hits with `confidence`, `mod_id`, `key`, `source`, `sour
 - `--index-dir` is an index root (same layout as `query --index-dir`). When omitted, release indexes are used from the default data directory.
 - `--dict-path` is a top-level global flag (place before the subcommand) that overrides Lindera dictionary storage for `query`/`dict`/`serve`/`mcp` and `builder index`.
 
+### MCP Server
+
+Exposes the glossary as [MCP](https://modelcontextprotocol.io) tools for AI assistants:
+
+```bash
+# stdio transport (for Cursor/Claude Desktop MCP config)
+packtrans-glossary mcp
+
+# streamable HTTP transport (experimental, local use only)
+packtrans-glossary mcp --http --host 127.0.0.1 --port 8081
+# endpoint: http://127.0.0.1:8081/mcp
+```
+
+**Options:**
+
+- `--http` switches from stdio to streamable HTTP.
+- `--host` defaults to `127.0.0.1`; `--port` defaults to `8081` (both only with `--http`).
+- `--index-dir` is an index root (same layout as `query --index-dir`). When omitted, release indexes are used from the default data directory.
+- `--dict-path` is a top-level global flag (place before the subcommand) that overrides Lindera dictionary storage for `query`/`dict`/`serve`/`mcp` and `builder index`.
+
+**Tools:**
+
+| Tool                     | Purpose                                                                 |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `glossary_query`         | Search translations for a single query                                  |
+| `glossary_query_batch`   | Search several queries that share one language and search configuration |
+| `glossary_list_languages` | List language codes available in the latest release index               |
+| `glossary_list_installed` | List glossary indexes installed locally                                 |
+
+`glossary_query` takes `lang`, `q`, and optional `limit` (max `50`), `inverse`, and `regex`.
+`glossary_query_batch` takes `lang`, `queries` (1–20 strings), plus the same optional settings, and returns
+`{ "results": [{ "query", "hits"?, "error"? }] }` — one entry per query, in input order. A query that fails
+invalidates only its own entry; failures shared by the whole batch (missing index, unusable language) are
+returned as a tool error instead.
+
 ### Managing Release Indexes
 
 ```bash
